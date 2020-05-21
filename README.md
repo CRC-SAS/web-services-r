@@ -89,8 +89,8 @@ del CRC-SAS pueden acceder a los registros de observaciones in situ a
 nivel diario.
 
 Provisoriamente, durante la etapa de desarrollo y experimentación, los
-servicios serán provistos desde <https://qc.smn.gob.ar>. En un futuro se
-actualizará este documento para indicar la nueva dirección de los
+servicios serán provistos desde <https://api.crc-sas.org>. En un futuro
+se actualizará este documento para indicar la nueva dirección de los
 servicios.
 
 # 4\. Servicios
@@ -220,7 +220,7 @@ encuentran ocultos por cuestiones de seguridad y deberán ser solicitados
 a las instituciones miembros del CRC-SAS):
 
 ``` r
-base.url        <- 'https://qc.smn.gob.ar/ws-api'
+base.url        <- 'https://api.crc-sas.org/ws-api'
 usuario.default <- '********' 
 clave.default   <- '********'
 ```
@@ -233,10 +233,10 @@ se hace mediante la concatenación de la URL base y la ruta. Cada
 servicio asociado a un conjunto de datos puede ser identificado
 unívocamente por una ruta. Las diferentes rutas se describen más abajo.
 A modo de ejemplo, para acceder al servicio de datos sobre estaciones se
-tomará la URL base provisoria (<https://qc.smn.gob.ar/ws-api>) y se la
+tomará la URL base provisoria (<https://api.crc-sas.org/ws-api>) y se la
 concatenará con la ruta de dicho servicio (/estaciones) resultando en la
 URL completa para este servicio
-(<https://qc.smn.gob.ar/ws-api/estaciones>). Las variables
+(<https://api.crc-sas.org/ws-api/estaciones>). Las variables
 *usuario.default* y *clave.default* son las credenciales de acceso
 necesarias para poder realizar la autenticación y obtener los datos
 buscados.
@@ -463,11 +463,11 @@ estaciones.vecinas.pehuajo <- ConsumirServicioJSON(url = glue::glue("{url.vecina
 knitr::kable(estaciones.vecinas.pehuajo)
 ```
 
-| omm\_id | nombre          |   latitud |  longitud | elevacion | nivel\_adm1  | nivel\_adm2     | distancia | diferencia\_elevacion |
-| ------: | :-------------- | --------: | --------: | --------: | :----------- | :-------------- | --------: | --------------------: |
-|   87540 | Trenque Lauquen | \-35.9690 | \-62.7261 |        95 | Buenos Aires | Trenque Lauquen |   79.4900 |                     8 |
-|   87640 | Bolívar Aero    | \-36.1864 | \-61.0727 |        94 | Buenos Aires | Bolívar         |   80.6614 |                     7 |
-|   87550 | Nueve de Julio  | \-35.4390 | \-60.8819 |        76 | Buenos Aires | Nueve de Julio  |   99.1498 |                    11 |
+|  omm\_id | nombre             |   latitud |  longitud | elevacion | nivel\_adm1  | nivel\_adm2     | distancia | diferencia\_elevacion |
+| -------: | :----------------- | --------: | --------: | --------: | :----------- | :-------------- | --------: | --------------------: |
+| 80000652 | EEA Cesareo Naredo | \-36.5000 | \-62.0000 |       120 | Buenos Aires | Guamini         |   74.2367 |                    33 |
+|    87540 | Trenque Lauquen    | \-35.9690 | \-62.7261 |        95 | Buenos Aires | Trenque Lauquen |   79.4900 |                     8 |
+|    87539 | Trenque Lauquen    | \-35.9692 | \-62.7262 |        95 | Buenos Aires | Trenque Lauquen |   79.5031 |                     8 |
 
 ## 4.2. Registros de observaciones de distintas variables meteorológicas a nivel diario
 
@@ -1015,7 +1015,7 @@ knitr::kable(spi.3.ultimo, digits = 2)
 
 | indice\_configuracion\_id | omm\_id | pentada\_fin |  ano | metodo\_imputacion\_id | valor\_dato | valor\_indice | percentil\_dato |
 | ------------------------: | ------: | -----------: | ---: | ---------------------: | ----------: | ------------: | --------------: |
-|                        43 |   87544 |           24 | 2020 |                      0 |       427.2 |          0.78 |           78.13 |
+|                        43 |   87544 |           27 | 2020 |                      0 |       386.2 |           0.7 |           75.65 |
 
 ### 4.4.3. Parámetros y otros valores resultantes del ajuste de distribuciones
 
@@ -1530,13 +1530,7 @@ url.chirps     <- glue::glue("{base.url}/chirps/spi/3/{fecha.desde}/{fecha.hasta
 zona.geojson   <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
 raster.chirps  <- ConsumirServicioEspacial(url = url.chirps, usuario = usuario.default, clave = clave.default,
                                            archivo.geojson.zona = zona.geojson)
-```
-
-\[1\] “vobjtovarid4: error \#F: I could not find the requsted var (or
-dimvar) in the file\!” \[1\] “var (or dimvar) name: time” \[1\] “file
-name: /tmp/RtmpNFz5dI/raster\_ws\_api2f0865ca51f”
-
-``` r
+                                           
 # Convertir raster a data frame en formato largo (x, y, fecha, ndvi).
 datos.chirps <- raster::rasterToPoints(raster.chirps) %>%
   dplyr::as_tibble() %>%

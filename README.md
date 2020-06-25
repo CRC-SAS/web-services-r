@@ -86,12 +86,8 @@ consumir cada usuario. Este acceso responde a las políticas provisorias
 de distribución de datos del CRC-SAS. Por ejemplo, solamente los
 miembros de los 6 servicios meteorológicos e hidrológicos de los países
 del CRC-SAS pueden acceder a los registros de observaciones in situ a
-nivel diario.
-
-Provisoriamente, durante la etapa de desarrollo y experimentación, los
-servicios serán provistos desde <https://api.crc-sas.org>. En un futuro
-se actualizará este documento para indicar la nueva dirección de los
-servicios.
+nivel diario. Los servicios serán provistos desde la URL base
+<https://api.crc-sas.org>.
 
 # 4\. Servicios
 

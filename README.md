@@ -8,7 +8,7 @@
 
 #### Guillermo Podestá (<gpodesta@rsmas.miami.edu>)
 
-#### 04 de mayo de 2020
+#### 08 de diciembre de 2020
 
 # 1\. Introducción
 
@@ -53,7 +53,9 @@ en los siguientes conjuntos de datos:
   - índices de vegetación (NDVI y EVI) derivados a partir de datos
     satelitales;
   - precipitaciones estimadas combinando datos de satélite e in situ
-    (CHIRPS).
+    (CHIRPS);
+  - pronósticos de precipitación y sequía a 15 días (CHIRPS-GEFS);
+  - índice de stress evaporativo (ESI) y percentiles derivados.
 
 Cada uno de los conjuntos de datos accesibles se describirá en más
 detalle en la sección *Servicios*.
@@ -229,9 +231,9 @@ se hace mediante la concatenación de la URL base y la ruta. Cada
 servicio asociado a un conjunto de datos puede ser identificado
 unívocamente por una ruta. Las diferentes rutas se describen más abajo.
 A modo de ejemplo, para acceder al servicio de datos sobre estaciones se
-tomará la URL base provisoria (<https://api.crc-sas.org/ws-api>) y se la
-concatenará con la ruta de dicho servicio (/estaciones) resultando en la
-URL completa para este servicio
+tomará la URL base (<https://api.crc-sas.org/ws-api>) y se la
+concatenará con la ruta de dicho servicio (/estaciones) resultando en
+la URL completa para este servicio
 (<https://api.crc-sas.org/ws-api/estaciones>). Las variables
 *usuario.default* y *clave.default* son las credenciales de acceso
 necesarias para poder realizar la autenticación y obtener los datos
@@ -308,7 +310,7 @@ se desea obtener, existen cuatro maneras de seleccionar las mismas:
 
 *Respuesta*: \[ { omm\_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel\_adm1: string, nivel\_adm2:
-string }\]
+string, tipo: string (C = convencional, A = automática) }\]
 
 *Ejemplo*:
 
@@ -321,14 +323,14 @@ estaciones <- ConsumirServicioJSON(url = paste0(base.url, "/estaciones"),
 knitr::kable(estaciones[1:6,])
 ```
 
-| omm\_id | nombre                      | latitud | longitud | elevacion | nivel\_adm1         | nivel\_adm2          |
-| ------: | :-------------------------- | ------: | -------: | --------: | :------------------ | :------------------- |
-|   87008 | Abra Pampa INTA             | \-22.83 |  \-65.85 |      3484 | Jujuy               | Cochinoca            |
-|   87118 | Famaillá INTA               | \-27.05 |  \-65.42 |       363 | Tucumán             | Famaillá             |
-|   87131 | La María INTA               | \-28.23 |  \-64.15 |       169 | Santiago del Estero | Silípica             |
-|   87144 | Las Breñas INTA             | \-27.08 |  \-61.12 |       102 | Chaco               | Nueve de Julio       |
-|   87147 | Pres. Roque Sáenz Peña INTA | \-26.87 |  \-60.45 |        90 | Chaco               | Comandante Fernández |
-|   87152 | El Colorado INTA            | \-26.30 |  \-59.37 |        78 | Formosa             | Pirané               |
+| omm\_id | nombre                      | latitud | longitud | elevacion | nivel\_adm1         | nivel\_adm2          | tipo |
+| ------: | :-------------------------- | ------: | -------: | --------: | :------------------ | :------------------- | :--- |
+|   87118 | Famaillá INTA               | \-27.05 |  \-65.42 |       363 | Tucumán             | Famaillá             | C    |
+|   87131 | La María INTA               | \-28.23 |  \-64.15 |       169 | Santiago del Estero | Silípica             | C    |
+|   87144 | Las Breñas INTA             | \-27.08 |  \-61.12 |       102 | Chaco               | Nueve de Julio       | C    |
+|   87147 | Pres. Roque Sáenz Peña INTA | \-26.87 |  \-60.45 |        90 | Chaco               | Comandante Fernández | C    |
+|   87158 | Colonia Benítez INTA        | \-27.42 |  \-58.93 |        54 | Chaco               | San Fernando         | C    |
+|   87180 | Cerro Azul INTA             | \-27.65 |  \-55.43 |       270 | Misiones            | Leandro N. Alem      | C    |
 
 ### 4.1.2. Estaciones de un país
 
@@ -343,7 +345,7 @@ knitr::kable(estaciones[1:6,])
 
 *Respuesta*: \[ { omm\_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel\_adm1: string, nivel\_adm2:
-string }\]
+string, tipo: string (C = convencional, A = automática) }\]
 
 *Ejemplo*:
 
@@ -356,14 +358,14 @@ estaciones.argentina <- ConsumirServicioJSON(url = paste0(base.url, "/estaciones
 knitr::kable(estaciones.argentina[1:6,])
 ```
 
-| omm\_id | nombre                      | latitud | longitud | elevacion | nivel\_adm1         | nivel\_adm2          |
-| ------: | :-------------------------- | ------: | -------: | --------: | :------------------ | :------------------- |
-|   87008 | Abra Pampa INTA             | \-22.83 |  \-65.85 |      3484 | Jujuy               | Cochinoca            |
-|   87118 | Famaillá INTA               | \-27.05 |  \-65.42 |       363 | Tucumán             | Famaillá             |
-|   87131 | La María INTA               | \-28.23 |  \-64.15 |       169 | Santiago del Estero | Silípica             |
-|   87144 | Las Breñas INTA             | \-27.08 |  \-61.12 |       102 | Chaco               | Nueve de Julio       |
-|   87147 | Pres. Roque Sáenz Peña INTA | \-26.87 |  \-60.45 |        90 | Chaco               | Comandante Fernández |
-|   87152 | El Colorado INTA            | \-26.30 |  \-59.37 |        78 | Formosa             | Pirané               |
+| omm\_id | nombre                      | latitud | longitud | elevacion | nivel\_adm1         | nivel\_adm2          | tipo |
+| ------: | :-------------------------- | ------: | -------: | --------: | :------------------ | :------------------- | :--- |
+|   87118 | Famaillá INTA               | \-27.05 |  \-65.42 |       363 | Tucumán             | Famaillá             | C    |
+|   87131 | La María INTA               | \-28.23 |  \-64.15 |       169 | Santiago del Estero | Silípica             | C    |
+|   87144 | Las Breñas INTA             | \-27.08 |  \-61.12 |       102 | Chaco               | Nueve de Julio       | C    |
+|   87147 | Pres. Roque Sáenz Peña INTA | \-26.87 |  \-60.45 |        90 | Chaco               | Comandante Fernández | C    |
+|   87158 | Colonia Benítez INTA        | \-27.42 |  \-58.93 |        54 | Chaco               | San Fernando         | C    |
+|   87180 | Cerro Azul INTA             | \-27.65 |  \-55.43 |       270 | Misiones            | Leandro N. Alem      | C    |
 
 ### 4.1.3. Estaciones de un país y de una institución o red
 
@@ -388,7 +390,7 @@ knitr::kable(estaciones.argentina[1:6,])
 
 *Respuesta*: \[ { omm\_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel\_adm1: string, nivel\_adm2:
-string }\]
+string, tipo: string (C = convencional, A = automática) }\]
 
 *Ejemplo*:
 
@@ -401,14 +403,14 @@ estaciones.argentina.smn <- ConsumirServicioJSON(url = paste0(base.url, "/estaci
 knitr::kable(estaciones.argentina.smn[1:6,])
 ```
 
-| omm\_id | nombre           |   latitud |  longitud | elevacion | nivel\_adm1 | nivel\_adm2                |
-| ------: | :--------------- | --------: | --------: | --------: | :---------- | :------------------------- |
-|   87016 | Orán Aero        | \-23.1547 | \-64.3281 |       357 | Salta       | Orán                       |
-|   87022 | Tartagal Aero    | \-22.6166 | \-63.7965 |       450 | Salta       | General José de San Martín |
-|   87043 | Jujuy Univ. Nac. | \-24.1786 | \-65.3263 |      1302 | Jujuy       | Palpalá                    |
-|   87046 | Jujuy Aero       | \-24.3840 | \-65.0955 |       905 | JUJUY       | El Carmen                  |
-|   87047 | Salta Aero       | \-24.8443 | \-65.4757 |      1221 | Salta       | Capital                    |
-|   87050 | Metán            | \-25.5243 | \-64.9730 |       855 | Salta       | Metán                      |
+| omm\_id | nombre           |   latitud |  longitud | elevacion | nivel\_adm1 | nivel\_adm2                | tipo |
+| ------: | :--------------- | --------: | --------: | --------: | :---------- | :------------------------- | :--- |
+|   87016 | Orán Aero        | \-23.1547 | \-64.3281 |       357 | Salta       | Orán                       | C    |
+|   87022 | Tartagal Aero    | \-22.6166 | \-63.7965 |       450 | Salta       | General José de San Martín | C    |
+|   87043 | Jujuy Univ. Nac. | \-24.1786 | \-65.3263 |      1302 | Jujuy       | Palpalá                    | C    |
+|   87046 | Jujuy Aero       | \-24.3840 | \-65.0955 |       905 | JUJUY       | El Carmen                  | C    |
+|   87047 | Salta Aero       | \-24.8443 | \-65.4757 |      1221 | Salta       | Capital                    | C    |
+|   87050 | Metán            | \-25.5243 | \-64.9730 |       855 | Salta       | Metán                      | C    |
 
 ### 4.1.4. Estaciones geográficamente vecinas
 
@@ -438,7 +440,8 @@ estaciones vecinas a devolver.
 
 *Respuesta*: \[ { omm\_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel\_adm1: string, nivel\_adm2:
-string, distancia: float, diferencia\_elevacion: float }\]
+string, tipo: string (C = convencional, A = automática), distancia:
+float, diferencia\_elevacion: float }\]
 
 *Ejemplo*:
 
@@ -459,11 +462,11 @@ estaciones.vecinas.pehuajo <- ConsumirServicioJSON(url = glue::glue("{url.vecina
 knitr::kable(estaciones.vecinas.pehuajo)
 ```
 
-|  omm\_id | nombre             |   latitud |  longitud | elevacion | nivel\_adm1  | nivel\_adm2     | distancia | diferencia\_elevacion |
-| -------: | :----------------- | --------: | --------: | --------: | :----------- | :-------------- | --------: | --------------------: |
-| 80000652 | EEA Cesareo Naredo | \-36.5000 | \-62.0000 |       120 | Buenos Aires | Guamini         |   74.2367 |                    33 |
-|    87540 | Trenque Lauquen    | \-35.9690 | \-62.7261 |        95 | Buenos Aires | Trenque Lauquen |   79.4900 |                     8 |
-|    87539 | Trenque Lauquen    | \-35.9692 | \-62.7262 |        95 | Buenos Aires | Trenque Lauquen |   79.5031 |                     8 |
+|  omm\_id | nombre             |   latitud |  longitud | elevacion | nivel\_adm1  | nivel\_adm2     | tipo | distancia | diferencia\_elevacion |
+| -------: | :----------------- | --------: | --------: | --------: | :----------- | :-------------- | :--- | --------: | --------------------: |
+| 80000652 | EEA Cesareo Naredo | \-36.5000 | \-62.0000 |       120 | Buenos Aires | Guamini         | A    |   74.2367 |                    33 |
+|    87540 | Trenque Lauquen    | \-35.9690 | \-62.7261 |        95 | Buenos Aires | Trenque Lauquen | C    |   79.4900 |                     8 |
+|    87539 | Trenque Lauquen    | \-35.9692 | \-62.7262 |        95 | Buenos Aires | Trenque Lauquen | A    |   79.5031 |                     8 |
 
 ## 4.2. Registros de observaciones de distintas variables meteorológicas a nivel diario
 
@@ -476,6 +479,36 @@ dos maneras diferentes:
     estación meteorológica; o
   - búsqueda de datos para UNA variable observada en UNA estación
     meteorológica.
+
+Estos servicios, además de devolver los valores diarios de las
+variables, incluyen también información resultante de los procesos de
+control de calidad y/o verificación manual en caso de haber sido
+efectuados. Esta información está presente en el atributo *estado* como
+dato categórico o etiqueta. Los valores posibles de las etiquetas son
+los siguientes:
+
+  - **A**: el valor de la variable ha sido *aprobado* por el control de
+    calidad;
+  - **S**: el valor de la variable ha sido declarado como *sospechoso*
+    por el control de calidad;
+  - **R**: el valor de la variable ha sido declarado como sospechoso por
+    el control de calidad pero ha sido *ratificado* durante el proceso
+    de verificación manual;
+  - **E** : el valor de la variable ha sido declarado como sospechoso
+    por el control de calidad y ha sido *eliminado* durante el proceso
+    de verificación manual;
+  - **C**: el valor de la variable ha sido declarado como sospechoso por
+    el control de calidad y ha sido *corregido* durante el proceso de
+    verificación manual;
+  - **N**: el valor de la variable ha sido declarado como sospechoso por
+    el control de calidad y ha sido declarado *no corregible* durante el
+    proceso de verificación manual;
+  - **N/A**: aún no se ha ejecutado el control de calidad para la
+    estación, fecha y variable asociada.
+
+Puede encontrar mayor información acerca del proceso de control de
+calidad en
+\[<https://www.crc-sas.org/es/pdf/reporte_tecnico_CRC-SAS-2014-001.pdf>\].
 
 ### 4.2.1. Búsqueda de datos para *todas* las variables observadas por una estación meteorológica
 
@@ -494,7 +527,7 @@ dos maneras diferentes:
     aproximadamente 10 años por llamada al servicio).
 
 *Respuesta*: \[ { omm\_id: integer fecha: date, variable\_id: string,
-valor: float
+estado: string, valor: float
 }\]
 
 *Ejemplo*:
@@ -511,14 +544,14 @@ registros.ancho       <- tidyr::spread(registros.largo, key = variable_id, value
 knitr::kable(registros.ancho[1:6,])
 ```
 
-| omm\_id | fecha      | helio | hr | nub | prcp | pres\_est | pres\_nm |   td | tmax | tmed | tmin | vmax\_d | vmax\_f | vmed |
-| ------: | :--------- | ----: | -: | --: | ---: | --------: | -------: | ---: | ---: | ---: | ---: | ------: | ------: | ---: |
-|   87544 | 2019-01-01 |   9.7 | 72 |   6 |   18 |     996.5 |   1006.4 | 22.4 | 32.6 | 28.1 | 19.0 |      29 |    11.8 |  3.1 |
-|   87544 | 2019-01-02 |   2.8 | 84 |   7 |   19 |     997.9 |   1007.9 | 19.2 | 27.4 | 22.2 | 20.2 |      16 |    15.4 |  7.0 |
-|   87544 | 2019-01-03 |  13.3 | 50 |   1 |    0 |    1002.3 |   1012.5 | 10.4 | 27.0 | 21.7 | 12.0 |      16 |    11.3 |  3.1 |
-|   87544 | 2019-01-04 |  13.2 | 57 |   0 |    0 |    1002.4 |   1012.5 | 15.7 | 30.3 | 25.1 | 17.2 |       2 |    10.3 |  3.4 |
-|   87544 | 2019-01-05 |  12.3 | 57 |   2 |   26 |     999.2 |   1009.2 | 17.2 | 30.6 | 26.5 | 17.4 |      18 |    17.5 |  4.8 |
-|   87544 | 2019-01-06 |   1.3 | 83 |   8 |    0 |     994.6 |   1004.7 | 18.8 | 25.4 | 21.9 | 18.6 |      23 |    14.4 |  2.7 |
+| omm\_id | fecha      | estado | helio | hr | nub | prcp | pres\_est | pres\_nm |   td | tmax | tmed | tmin | vmax\_d | vmax\_f | vmed |
+| ------: | :--------- | :----- | ----: | -: | --: | ---: | --------: | -------: | ---: | ---: | ---: | ---: | ------: | ------: | ---: |
+|   87544 | 2019-01-01 | A      |   9.7 | 72 |   6 |   18 |     996.5 |   1006.4 | 22.4 | 32.6 | 28.1 | 19.0 |      29 |    11.8 |  3.1 |
+|   87544 | 2019-01-02 | A      |   2.8 | 84 |   7 |   19 |     997.9 |   1007.9 | 19.2 | 27.4 | 22.2 | 20.2 |      16 |    15.4 |  7.0 |
+|   87544 | 2019-01-03 | A      |  13.3 | 50 |   1 |    0 |    1002.3 |   1012.5 | 10.4 | 27.0 | 21.7 | 12.0 |      16 |    11.3 |  3.1 |
+|   87544 | 2019-01-04 | A      |  13.2 | 57 |   0 |    0 |    1002.4 |   1012.5 | 15.7 | 30.3 | 25.1 | 17.2 |       2 |    10.3 |  3.4 |
+|   87544 | 2019-01-05 | A      |  12.3 | 57 |   2 |   26 |     999.2 |   1009.2 | 17.2 | 30.6 | 26.5 | 17.4 |      18 |    17.5 |  4.8 |
+|   87544 | 2019-01-06 | A      |   1.3 | 83 |   8 |    0 |     994.6 |   1004.7 | 18.8 | 25.4 | 21.9 | 18.6 |      23 |    14.4 |  2.7 |
 
 ``` r
 # Serie temporal de temperaturas
@@ -559,7 +592,7 @@ ggplot2::ggplot(data = serie.temperaturas) +
     aproximadamente 10 años por llamada al servicio).
 
 *Respuesta*: \[ { omm\_id: integer fecha: date, variable\_id: string,
-valor: float
+estado: string, valor: float
 }\]
 
 *Ejemplo*:
@@ -1011,7 +1044,7 @@ knitr::kable(spi.3.ultimo, digits = 2)
 
 | indice\_configuracion\_id | omm\_id | pentada\_fin |  ano | metodo\_imputacion\_id | valor\_dato | valor\_indice | percentil\_dato |
 | ------------------------: | ------: | -----------: | ---: | ---------------------: | ----------: | ------------: | --------------: |
-|                        43 |   87544 |           27 | 2020 |                      0 |       386.2 |           0.7 |           75.65 |
+|                        43 |   87544 |           67 | 2020 |                      0 |       220.1 |        \-0.63 |           26.33 |
 
 ### 4.4.3. Parámetros y otros valores resultantes del ajuste de distribuciones
 
@@ -1235,7 +1268,7 @@ Difference Vegetation Index) y el EVI (Enhanced Vegetation Index)
 \[16\]. Se proveen datos para cualquier aŕea incluida dentro del
 CRC-SAS, la cual debe especificarse en formato GeoJSON \[17\]. Para
 limitar el volumen de datos a transferir por medio del servicio, el área
-de la zona especificada no debe exceder los 200.000 km<sup>2</sup>.
+de la zona especificada no debe exceder los 2.000.000 km<sup>2</sup>.
 
 El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
@@ -1345,7 +1378,7 @@ grado de latitud y longitud. Se proveen datos para cualquier aŕea
 incluida dentro del CRC-SAS, la cual debe especificarse en formato
 GeoJSON \[17\]. Para limitar el volumen de datos a transferir por medio
 del servicio, el área de la zona especificada no debe exceder los
-200.000 km<sup>2</sup>.
+2.000.000 km<sup>2</sup>.
 
 El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
@@ -1455,7 +1488,7 @@ período para el cual el SPI-3 está disponible es el comprendido entre
 2016-10-06 al 2017-01-05). Se proveen datos para cualquier aŕea incluida
 dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON
 \[17\]. Para limitar el volumen de datos a transferir por medio del
-servicio, el área de la zona especificada no debe exceder los 200.000
+servicio, el área de la zona especificada no debe exceder los 2.000.000
 km<sup>2</sup>.
 
 El servicio devuelve como respuesta un stream de datos binarios
@@ -1526,8 +1559,8 @@ url.chirps     <- glue::glue("{base.url}/chirps/spi/3/{fecha.desde}/{fecha.hasta
 zona.geojson   <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
 raster.chirps  <- ConsumirServicioEspacial(url = url.chirps, usuario = usuario.default, clave = clave.default,
                                            archivo.geojson.zona = zona.geojson)
-                                           
-# Convertir raster a data frame en formato largo (x, y, fecha, ndvi).
+
+# Convertir raster a data frame en formato largo (x, y, fecha, prcp).
 datos.chirps <- raster::rasterToPoints(raster.chirps) %>%
   dplyr::as_tibble() %>%
   dplyr::rename(x = 1) %>%
@@ -1560,6 +1593,275 @@ ggplot2::ggplot(data = datos.chirps) +
 ```
 
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
+
+### Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
+
+La evolución esperada de la sequía en las próximas dos semanas se basa
+en un pronóstico de lluvias para los proximos 15 días generado por el
+Climate Hazards Center de los Estados Unidos, la misma institución que
+genera los campos de precipitación CHIRPS. El pronóstico está basado en
+el modelo numérico Global Ensemble Forecast System o GEFS
+(<https://www.esrl.noaa.gov/psd/forecasts/reforecast2/>) desarrollado
+por el Centro Nacional de Predicción Ambiental (NCEP, por sus siglas en
+inglés de los Estados Unidos) a través del modelo Global Ensemble
+Forecast System o GEFS. El Climate Hazards Center realiza un proceso de
+calibración (o remoción del sesgo) en los valores pronosticados \[22\].
+
+A partir de esta información de pronósticos para 15 días (o 3 péntadas
+en términos del producto CHIRPS), se construye en ensamble de capas de
+datos considerando 15 péntadas de datos observados (2 meses y medio) y
+las 3 péntadas pronosticadas. Este ensamble constituye una capa de 18
+péntadas de precipitaciones las cuales son acumuladas con el fin de
+calcular valores de SPI-3 y percentiles de precipitación acumulada del
+mismo modo que se realiza para el producto CHIRPS.
+
+El servicio permite consultar a) valores de precipitación pronosticada,
+b) ensamble de precipitación acumulada observada/pronosticada, c)
+valores de SPI y d) percentiles de precipitación acumulada para la
+escala temporal de 3 meses. Se proveen datos para cualquier aŕea
+incluida dentro del CRC-SAS, la cual debe especificarse en formato
+GeoJSON \[17\]. Para limitar el volumen de datos a transferir por medio
+del servicio, el área de la zona especificada no debe exceder los
+2.000.000 km<sup>2</sup>.
+
+El servicio devuelve como respuesta un stream de datos binarios
+correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
+NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  - Sistema de coordenadas:
+      - Latitud/Longitud: sistema de coordenadas expresadas en grados
+        decimales;
+      - String de proyección: +proj=longlat +datum=WGS84 +no\_defs
+        +ellps=WGS84 +towgs84=0,0,0;
+      - Código EPSG: 4326.
+  - Dimensiones:
+      - longitude: coordenada X (o longitud) expresada en grados
+        decimales;
+      - latitude: coordenada Y (o latitud) expresada en grados
+        decimales;
+      - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+        corresponde a la fecha de inicio de la péntada o mes asociado a
+        la capa de datos.
+  - Variables:
+      - forecasted\_total | total | spi | percentile: valor de
+        precipitación pronosticada a 15 días (forecasted\_total),
+        ensamble de precipitación acumulada observada/pronosticada
+        (total), índice SPI (spi) o percentil asociado, para la escala
+        temporal especificada (percentile).
+
+Con el propósito de facilitar la manipulación de los datos devueltos
+(que requiere conocimiento sobre archivos NetCDF), se recomienda
+enfáticamente utilizar la función *ConsumirServicioEspacial* provista
+al inicio del documento. Esta función permite invocar el servicio y
+obtener directamente un objeto de tipo *raster* \[19\].
+
+*Ruta*:
+/chirps/pronostico/{producto:string}/{escala:int}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - producto: { forecasted\_total = valor de precipitación pronosticada
+    a 15 días, total = ensamble de precipitación acumulada
+    observada/pronosticada, spi = índice SPI, percentile = percentil
+    asociado, para la escala temporal especificada };
+  - escala: escala temporal “ET” de agregación (por el momento solamente
+    3 meses);
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa la zona sobre
+    la cual se efectuará la consulta.
+
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
+descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+``` r
+# Buscar pronosticado de lluvias a 15 días usando CHIRPS-GEFS 
+# para Mayo de 2020 (departamentos de Paysandú y Durazno (UY).
+fecha.desde         <- ConvertirFechaISO8601(as.Date("2020-05-01", tz = UTC))
+fecha.hasta         <- ConvertirFechaISO8601(as.Date("2020-05-31", tz = UTC))
+url.chirps          <- glue::glue("{base.url}/chirps/pronostico/forecasted_total/3/{fecha.desde}/{fecha.hasta}")
+zona.geojson        <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
+raster.chirps.gefs  <- ConsumirServicioEspacial(url = url.chirps, 
+                                                usuario = usuario.default, 
+                                                clave = clave.default,
+                                                archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, prcp).
+datos.chirps.gefs <- raster::rasterToPoints(raster.chirps.gefs) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = prcp_pronosticada, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::select(x, y, fecha, prcp_pronosticada)
+
+# Graficar rasters de CHIRPS.
+ggplot2::ggplot(data = datos.chirps.gefs) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = prcp_pronosticada)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Totales de precipitación a 15 días basados en CHIRPS-GEFS",
+                subtitle = "Valores correspondientes a Mayo de 2020 (Paysandú y Durazno - Uruguay)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
+
+## Índice de Stress Evaporativo (ESI) y percentiles derivados
+
+El Índice de Estrés Evaporativo (o, en adelante, ESI por sus siglas en
+inglés) identifica regiones donde la vegetación está sufriendo estrés
+por falta de agua. El ESI se produce semanalmente con una resolución
+espacial de aproximadamente 5x5 km y cubre todo el globo. Este producto
+describe la humedad del suelo en todo el paisaje sin utilizar datos de
+lluvia observados. Esto es fundamental en las regiones en desarrollo y
+otras partes del mundo que carecen de suficientes observaciones
+terrestres de las precipitaciones. Al no utilizar datos de lluvias, el
+ESI es útil para estudiar cómo los cultivos responden al riego.
+
+El ESI es especialmente útil para predecir un fenómeno llamado *sequías
+repentinas* (o *flash droughts*). A diferencia de las sequías típicas
+que pueden tardar meses o años en desarrollarse, las sequías repentinas
+ocurren mucho más repentinamente y pueden dañar los cultivos en cuestión
+de semanas, mucho antes de que el estrés cause signos visibles de daño.
+Las *sequías repentinas* generalmente son provocadas por períodos
+prolongados de condiciones cálidas, secas y ventosas que agotan
+rápidamente la humedad del suelo. La ocurrencia de tasas reducidas de
+pérdida de agua por evapotranspiracion puede estimarse mediante el uso
+de la temperatura de la superficie de la tierra antes de que estas
+pérdidas se reflejen en disminuciones en la salud o *verdor* de la
+vegetación (por ejemplo los índices de vegetación NDVI o EVI) \[22\].
+
+Este servicio permite consultar valores de ESI y los percentiles
+asociados calculados en base al período de referencia 2002-2019. El
+servicio devuelve a) valores de ESI y b) percentiles de ESI para la
+escala temporal “ET”. En ambos casos los valores devueltos están
+disponibles para escalas temporales de 4 y 12 semanas. Se proveen datos
+para cualquier aŕea incluida dentro del CRC-SAS, la cual debe
+especificarse en formato GeoJSON \[17\]. Para limitar el volumen de
+datos a transferir por medio del servicio, el área de la zona
+especificada no debe exceder los 2.000.000 km<sup>2</sup>.
+
+El servicio devuelve como respuesta un stream de datos binarios
+correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
+NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  - Sistema de coordenadas:
+      - Latitud/Longitud: sistema de coordenadas expresadas en grados
+        decimales;
+      - String de proyección: +proj=longlat +datum=WGS84 +no\_defs
+        +ellps=WGS84 +towgs84=0,0,0;
+      - Código EPSG: 4326.
+  - Dimensiones:
+      - longitude: coordenada X (o longitud) expresada en grados
+        decimales;
+      - latitude: coordenada Y (o latitud) expresada en grados
+        decimales;
+      - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+        corresponde a la fecha de inicio de la péntada o mes asociado a
+        la capa de datos.
+  - Variables:
+      - esi | percentiles: valor de índice ESI o percentil asociado,
+        para la escala temporal especificada.
+
+Con el propósito de facilitar la manipulación de los datos devueltos
+(que requiere conocimiento sobre archivos NetCDF), se recomienda
+enfáticamente utilizar la función *ConsumirServicioEspacial* provista
+al inicio del documento. Esta función permite invocar el servicio y
+obtener directamente un objeto de tipo *raster* \[19\].
+
+*Ruta*:
+/esi/{producto:string}/{escala:string}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - producto: { esi = índice ESI, percentiles = percentils asociado
+    índice ESI };
+  - escala: escala temporal “ET” de agregación del ESI o percentiles {
+    4WK = 4 semanas, 12WK = 12 semanas };
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa la zona sobre
+    la cual se efectuará la consulta.
+
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
+descripción en párrafos
+anteriores).
+
+*Ejemplo*:
+
+``` r
+# Buscar ESI con escala temporal de 4 semanas para Enero de 2019 (departamentos de Paysandú y Durazno (UY)).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.esi      <- glue::glue("{base.url}/esi/esi/4WK/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
+raster.esi   <- ConsumirServicioEspacial(url = url.esi, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, esi).
+datos.esi <- raster::rasterToPoints(raster.esi) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = esi, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::select(x, y, fecha, esi)
+
+# Graficar rasters de ESI
+ggplot2::ggplot(data = datos.esi) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = esi)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Índice de Stress Evaporativo (ESI) para Paysandú y Durazno (Uruguay)",
+                subtitle = "Valores para escala temporal de 4 semanas (Enero de 2019)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-24-1.png" style="display: block; margin: auto;" />
 
 # Referencias
 
@@ -1615,3 +1917,8 @@ Indices (SPI and SPEI). International Journal of Climatology, 35(13):
 \[20\] <https://www.iso.org/standard/70907.html>
 
 \[21\] <https://www.chc.ucsb.edu/data/chirps>
+
+\[22\] <https://chc.ucsb.edu/data/chirps-gefs>
+
+\[23\]
+<https://sissa.crc-sas.org/monitoreo/indice-de-estres-evaporativo>

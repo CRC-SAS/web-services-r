@@ -11,7 +11,7 @@ output:
 #### Santiago Rovere (srovere@gmail.com)
 #### Daniel Bonhaure (danielbonhaure@gmail.com)
 #### Guillermo Podestá (gpodesta@rsmas.miami.edu)
-#### 04 de mayo de 2020
+#### 08 de diciembre de 2020
 
 
 # 1. Introducción
@@ -35,7 +35,9 @@ La API descrita en este documento provee acceso a información organizada en los
 * índices de sequía;
 * eventos secos y húmedos identificados mediante índices de sequía;
 * índices de vegetación (NDVI y EVI) derivados a partir de datos satelitales;
-* precipitaciones estimadas combinando datos de satélite e in situ (CHIRPS).
+* precipitaciones estimadas combinando datos de satélite e in situ (CHIRPS);
+* pronósticos de precipitación y sequía a 15 días (CHIRPS-GEFS);
+* índice de stress evaporativo (ESI) y percentiles derivados.
 
 Cada uno de los conjuntos de datos accesibles se describirá en más detalle en la sección *Servicios*.
 
@@ -155,7 +157,7 @@ Además, a efecto de poder probar los ejemplos de esta documentación, se define
 
 ```{r, echo = FALSE}
 base.url        <- 'https://api.crc-sas.org/ws-api'
-usuario.default <- '********'
+usuario.default <- '********' 
 clave.default   <- '********'
 ```
 
@@ -165,7 +167,7 @@ usuario.default <- '********'
 clave.default   <- '********'
 ```
 
-La variable *base.url* representa la dirección URL base (Uniform Resource Locator [8]) común a todos los servicios. Cada servicio está unívocamente identificado por una URL que se construye a partir de la URL base y una ruta (o ubicación) asociada al mismo. Esta construcción se hace mediante la concatenación de la URL base y la ruta. Cada servicio asociado a un conjunto de datos puede ser identificado unívocamente por una ruta. Las diferentes rutas se describen más abajo. A modo de ejemplo, para acceder al servicio de datos sobre estaciones se tomará la URL base provisoria (https://api.crc-sas.org/ws-api) y se la concatenará con la ruta de dicho servicio (/estaciones) resultando en la URL completa para este servicio (https://api.crc-sas.org/ws-api/estaciones). Las variables *usuario.default* y *clave.default* son las credenciales de acceso necesarias para poder realizar la autenticación y obtener los datos buscados.
+La variable *base.url* representa la dirección URL base (Uniform Resource Locator [8]) común a todos los servicios. Cada servicio está unívocamente identificado por una URL que se construye a partir de la URL base y una ruta (o ubicación) asociada al mismo. Esta construcción se hace mediante la concatenación de la URL base y la ruta. Cada servicio asociado a un conjunto de datos puede ser identificado unívocamente por una ruta. Las diferentes rutas se describen más abajo. A modo de ejemplo, para acceder al servicio de datos sobre estaciones se tomará la URL base (https://api.crc-sas.org/ws-api) y se la concatenará con la ruta de dicho servicio (/estaciones) resultando en la URL completa para este servicio (https://api.crc-sas.org/ws-api/estaciones). Las variables *usuario.default* y *clave.default* son las credenciales de acceso necesarias para poder realizar la autenticación y obtener los datos buscados.
 
 A continuación, se describirá en detalle cada conjunto de datos y los servicios provistos para acceder a los mismos. Para cada servicio se proveerá la siguiente información:
 
@@ -209,7 +211,8 @@ Para cada estación, se puede consultar información relativa a la misma (metada
     longitud: float,
     elevacion: integer,
     nivel_adm1: string,
-    nivel_adm2: string
+    nivel_adm2: string,
+    tipo: string (C = convencional, A = automática)
   }
 ]
 
@@ -243,7 +246,8 @@ knitr::kable(estaciones[1:6,])
     longitud: float,
     elevacion: integer,
     nivel_adm1: string,
-    nivel_adm2: string
+    nivel_adm2: string,
+    tipo: string (C = convencional, A = automática)
   }
 ]
 
@@ -288,7 +292,8 @@ knitr::kable(estaciones.argentina[1:6,])
     longitud: float,
     elevacion: integer,
     nivel_adm1: string,
-    nivel_adm2: string
+    nivel_adm2: string,
+    tipo: string (C = convencional, A = automática)
   }
 ]
 
@@ -328,6 +333,7 @@ Este servicio permite buscar las estaciones geográficamente vecinas a una estac
     elevacion: integer,
     nivel_adm1: string,
     nivel_adm2: string,
+    tipo: string (C = convencional, A = automática),
     distancia: float,
     diferencia_elevacion: float
   }
@@ -358,8 +364,20 @@ Los siguientes dos servicios permiten acceder a los valores diarios para las var
 
   * búsqueda de datos para TODAS las variables observadas en UNA estación meteorológica; o
   * búsqueda de datos para UNA variable observada en UNA estación meteorológica.
+  
+Estos servicios, además de devolver los valores diarios de las variables, incluyen también información resultante de los procesos de control de calidad y/o  verificación manual en caso de haber sido efectuados. Esta información está presente en el atributo *estado* como dato categórico o etiqueta. Los valores posibles de las etiquetas son los siguientes:
 
-### 4.2.1. Búsqueda de datos para *todas* las variables observadas por una estación meteorológica
+ * **A**: el valor de la variable ha sido *aprobado* por el control de calidad;
+ * **S**: el valor de la variable ha sido declarado como *sospechoso* por el control de calidad;
+ * **R**: el valor de la variable ha sido declarado como sospechoso por el control de calidad pero ha sido *ratificado* durante el proceso de verificación manual;
+ * **E** : el valor de la variable ha sido declarado como sospechoso por el control de calidad y ha sido *eliminado* durante el proceso de verificación manual;
+ * **C**: el valor de la variable ha sido declarado como sospechoso por el control de calidad y ha sido *corregido* durante el proceso de verificación manual;
+ * **N**: el valor de la variable ha sido declarado como sospechoso por el control de calidad y ha sido declarado *no corregible* durante el proceso de verificación manual;
+ * **N/A**: aún no se ha ejecutado el control de calidad para la estación, fecha y variable asociada.
+
+Puede encontrar mayor información acerca del proceso de control de calidad en [https://www.crc-sas.org/es/pdf/reporte_tecnico_CRC-SAS-2014-001.pdf].
+
+###  4.2.1. Búsqueda de datos para *todas* las variables observadas por una estación meteorológica
 
 *Ruta*: /registros_diarios/{omm_id:int}/{fecha_desde:date}/{fecha_hasta:date}
 
@@ -377,6 +395,7 @@ Los siguientes dos servicios permiten acceder a los valores diarios para las var
     omm_id: integer
     fecha: date,
     variable_id: string,
+    estado: string,
     valor: float
   }
 ]
@@ -431,6 +450,7 @@ ggplot2::ggplot(data = serie.temperaturas) +
     omm_id: integer
     fecha: date,
     variable_id: string,
+    estado: string,
     valor: float
   }
 ]
@@ -884,7 +904,7 @@ knitr::kable(eventos.pehuajo, digits = 2)
 
 ## 4.6. Índices de vegetación (NDVI y EVI) a partir de datos satelitales
 
-Este servicio permite consultar datos de índices de vegetación derivados a partir del instrumento MODIS a bordo de los satélites Aqua y Terra operados por la NASA. Los índices disponibles son el NDVI (Normalized Difference Vegetation Index) y el EVI (Enhanced Vegetation Index) [16]. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 200.000 km^2^.
+Este servicio permite consultar datos de índices de vegetación derivados a partir del instrumento MODIS a bordo de los satélites Aqua y Terra operados por la NASA. Los índices disponibles son el NDVI (Normalized Difference Vegetation Index) y el EVI (Enhanced Vegetation Index) [16]. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
 
 El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
 
@@ -964,7 +984,7 @@ ggplot2::ggplot(data = datos.ndvi) +
 
 ### 4.7.1. Totales de precipitación por péntada y por mes
 
-Este servicio permite consultar valores de precipitación contenidos en el producto CHIRPS [21]. Las precipitaciones en CHIRPS son derivadas a partir de la combinación de datos satélitales e in situ. Los datos de precipitación que devuelve este servicio pueden solicitarse con un nivel de agregación temporal a escalas de péntadas o meses. Los datos de precipitación se devuelven en una grilla regular de 0,1 grado por 0,1 grado de latitud y longitud. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 200.000 km^2^.
+Este servicio permite consultar valores de precipitación contenidos en el producto CHIRPS [21]. Las precipitaciones en CHIRPS son derivadas a partir de la combinación de datos satélitales e in situ. Los datos de precipitación que devuelve este servicio pueden solicitarse con un nivel de agregación temporal a escalas de péntadas o meses. Los datos de precipitación se devuelven en una grilla regular de 0,1 grado por 0,1 grado de latitud y longitud. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
 
 El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
 
@@ -1042,7 +1062,7 @@ ggplot2::ggplot(data = datos.chirps) +
 
 ### 4.7.2. Índices de sequía basados en precipitaciones estimadas usando el producto CHIRPS
 
-Este servicio permite consultar valores del índice de sequía SPI calculado en base a precipitaciones estimadas por el producto CHIRPS [21]. El servicio devuelve a) valores de SPI-ET y b) percentiles de precipitación acumulada para la escala temporal "ET". En ambos casos los valores devueltos están disponibles para escalas temporales de 3, 6 y 12 meses. En la actualidad, los valores están disponibles para períodos que finalicen entre el 2017-01-01 y la actualidad (por ejemplo el primer período para el cual el SPI-3 está disponible es el comprendido entre 2016-10-06 al 2017-01-05). Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 200.000 km^2^.
+Este servicio permite consultar valores del índice de sequía SPI calculado en base a precipitaciones estimadas por el producto CHIRPS [21]. El servicio devuelve a) valores de SPI-ET y b) percentiles de precipitación acumulada para la escala temporal "ET". En ambos casos los valores devueltos están disponibles para escalas temporales de 3, 6 y 12 meses. En la actualidad, los valores están disponibles para períodos que finalicen entre el 2017-01-01 y la actualidad (por ejemplo el primer período para el cual el SPI-3 está disponible es el comprendido entre 2016-10-06 al 2017-01-05). Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
 
 El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
 
@@ -1091,7 +1111,7 @@ zona.geojson   <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
 raster.chirps  <- ConsumirServicioEspacial(url = url.chirps, usuario = usuario.default, clave = clave.default,
                                            archivo.geojson.zona = zona.geojson)
 
-# Convertir raster a data frame en formato largo (x, y, fecha, ndvi).
+# Convertir raster a data frame en formato largo (x, y, fecha, prcp).
 datos.chirps <- raster::rasterToPoints(raster.chirps) %>%
   dplyr::as_tibble() %>%
   dplyr::rename(x = 1) %>%
@@ -1111,6 +1131,176 @@ ggplot2::ggplot(data = datos.chirps) +
   ggplot2::labs(x = "", y = "", fill = "",
                 title = "SPI basado en CHIRPS para Paysandú y Durazno (Uruguay)",
                 subtitle = "Valores correspondientes a SPI-3 para Enero de 2018") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+### Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
+
+La evolución esperada de la sequía en las próximas dos semanas se basa en un pronóstico de lluvias para los proximos 15 días generado por el Climate Hazards Center de los Estados Unidos, la misma institución que genera los campos de precipitación CHIRPS. El pronóstico está basado en el modelo numérico Global Ensemble Forecast System o GEFS (https://www.esrl.noaa.gov/psd/forecasts/reforecast2/) desarrollado por el Centro Nacional de Predicción Ambiental (NCEP, por sus siglas en inglés de los Estados Unidos) a través del modelo Global Ensemble Forecast System o GEFS. El Climate Hazards Center realiza un proceso de calibración (o remoción del sesgo) en los valores pronosticados [22].
+
+A partir de esta información de pronósticos para 15 días (o 3 péntadas en términos del producto CHIRPS), se construye en ensamble de capas de datos considerando 15 péntadas de datos observados (2 meses y medio) y las 3 péntadas pronosticadas. Este ensamble constituye una capa de 18 péntadas de precipitaciones las cuales son acumuladas con el fin de calcular valores de SPI-3 y percentiles de precipitación acumulada del mismo modo que se realiza para el producto CHIRPS.
+
+El servicio permite consultar a) valores de precipitación pronosticada, b) ensamble de precipitación acumulada observada/pronosticada, c) valores de SPI y d) percentiles de precipitación acumulada para la escala temporal de 3 meses. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
+
+El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * String de proyección: +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0;
+    * Código EPSG: 4326.
+  * Dimensiones: 
+    * longitude: coordenada X (o longitud) expresada en grados decimales;
+    * latitude: coordenada Y (o latitud) expresada en grados decimales;
+    * time: cantidad de días desde el 1 de Enero de 1970 (día 0); corresponde a la fecha de inicio de la péntada o mes asociado a la capa de datos.
+  * Variables: 
+    * forecasted_total | total | spi | percentile: valor de precipitación pronosticada a 15 días (forecasted_total), ensamble de precipitación acumulada observada/pronosticada (total), índice SPI (spi) o percentil asociado, para la escala temporal especificada (percentile).
+    
+Con el propósito de facilitar la manipulación de los datos devueltos (que requiere conocimiento sobre archivos NetCDF), se recomienda enfáticamente utilizar la función *ConsumirServicioEspacial* provista al inicio del documento. Esta función permite invocar el servicio y obtener directamente un objeto de tipo *raster* [19].
+
+*Ruta*: /chirps/pronostico/{producto:string}/{escala:int}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { forecasted_total = valor de precipitación pronosticada a 15 días, total = ensamble de precipitación acumulada observada/pronosticada, spi = índice SPI, percentile = percentil asociado, para la escala temporal especificada };
+  * escala: escala temporal "ET" de agregación (por el momento solamente 3 meses);
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa la zona sobre la cual se efectuará la consulta.
+  
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar pronosticado de lluvias a 15 días usando CHIRPS-GEFS 
+# para Mayo de 2020 (departamentos de Paysandú y Durazno (UY).
+fecha.desde         <- ConvertirFechaISO8601(as.Date("2020-05-01", tz = UTC))
+fecha.hasta         <- ConvertirFechaISO8601(as.Date("2020-05-31", tz = UTC))
+url.chirps          <- glue::glue("{base.url}/chirps/pronostico/forecasted_total/3/{fecha.desde}/{fecha.hasta}")
+zona.geojson        <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
+raster.chirps.gefs  <- ConsumirServicioEspacial(url = url.chirps, 
+                                                usuario = usuario.default, 
+                                                clave = clave.default,
+                                                archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, prcp).
+datos.chirps.gefs <- raster::rasterToPoints(raster.chirps.gefs) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = prcp_pronosticada, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::select(x, y, fecha, prcp_pronosticada)
+
+# Graficar rasters de CHIRPS.
+ggplot2::ggplot(data = datos.chirps.gefs) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = prcp_pronosticada)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Totales de precipitación a 15 días basados en CHIRPS-GEFS",
+                subtitle = "Valores correspondientes a Mayo de 2020 (Paysandú y Durazno - Uruguay)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+## Índice de Stress Evaporativo (ESI) y percentiles derivados
+
+El Índice de Estrés Evaporativo (o, en adelante, ESI por sus siglas en inglés) identifica regiones donde la vegetación está sufriendo estrés por falta de agua. El ESI se produce semanalmente con una resolución espacial de aproximadamente 5x5 km y cubre todo el globo. Este producto describe la humedad del suelo en todo el paisaje sin utilizar datos de lluvia observados. Esto es fundamental en las regiones en desarrollo y otras partes del mundo que carecen de suficientes observaciones terrestres de las precipitaciones. Al no utilizar datos de lluvias, el ESI es útil para estudiar cómo los cultivos responden al riego. 
+
+El ESI es especialmente útil para predecir un fenómeno llamado *sequías repentinas* (o *flash droughts*). A diferencia de las sequías típicas que pueden tardar meses o años en desarrollarse, las sequías repentinas ocurren mucho más repentinamente y pueden dañar los cultivos en cuestión de semanas, mucho antes de que el estrés cause signos visibles de daño. Las *sequías repentinas* generalmente son provocadas por períodos prolongados de condiciones cálidas, secas y ventosas que agotan rápidamente la humedad del suelo. La ocurrencia de tasas reducidas de pérdida de agua por evapotranspiracion puede estimarse mediante el uso de la temperatura de la superficie de la tierra antes de que estas pérdidas se reflejen en disminuciones en la salud o *verdor* de la vegetación (por ejemplo los índices de vegetación NDVI o EVI) [22].
+
+Este servicio permite consultar valores de ESI y los percentiles asociados calculados en base al período de referencia 2002-2019. El servicio devuelve a) valores de ESI y b) percentiles de ESI para la escala temporal "ET". En ambos casos los valores devueltos están disponibles para escalas temporales de 4 y 12 semanas. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
+
+El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * String de proyección: +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0;
+    * Código EPSG: 4326.
+  * Dimensiones: 
+    * longitude: coordenada X (o longitud) expresada en grados decimales;
+    * latitude: coordenada Y (o latitud) expresada en grados decimales;
+    * time: cantidad de días desde el 1 de Enero de 1970 (día 0); corresponde a la fecha de inicio de la péntada o mes asociado a la capa de datos.
+  * Variables: 
+    * esi | percentiles: valor de índice ESI o percentil asociado, para la escala temporal especificada.
+    
+Con el propósito de facilitar la manipulación de los datos devueltos (que requiere conocimiento sobre archivos NetCDF), se recomienda enfáticamente utilizar la función *ConsumirServicioEspacial* provista al inicio del documento. Esta función permite invocar el servicio y obtener directamente un objeto de tipo *raster* [19].
+
+*Ruta*: /esi/{producto:string}/{escala:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { esi = índice ESI, percentiles = percentils asociado índice ESI };
+  * escala: escala temporal "ET" de agregación del ESI o percentiles { 4WK = 4 semanas, 12WK = 12 semanas };
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa la zona sobre la cual se efectuará la consulta.
+  
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar ESI con escala temporal de 4 semanas para Enero de 2019 (departamentos de Paysandú y Durazno (UY)).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.esi      <- glue::glue("{base.url}/esi/esi/4WK/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/ZonasEjemplo.geojson")
+raster.esi   <- ConsumirServicioEspacial(url = url.esi, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, esi).
+datos.esi <- raster::rasterToPoints(raster.esi) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = esi, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::select(x, y, fecha, esi)
+
+# Graficar rasters de ESI
+ggplot2::ggplot(data = datos.esi) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = esi)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Índice de Stress Evaporativo (ESI) para Paysandú y Durazno (Uruguay)",
+                subtitle = "Valores para escala temporal de 4 semanas (Enero de 2019)") +
   ggplot2::theme_bw() +
   ggplot2::theme(
     legend.position = 'bottom',
@@ -1164,6 +1354,10 @@ ggplot2::ggplot(data = datos.chirps) +
 
 [19]	https://cran.r-project.org/package=raster
 
-[20]  https://www.iso.org/standard/70907.html
+[20]	https://www.iso.org/standard/70907.html
 
-[21]	https://www.chc.ucsb.edu/data/chirps
+[21]  https://www.chc.ucsb.edu/data/chirps
+
+[22]  https://chc.ucsb.edu/data/chirps-gefs
+
+[23]  https://sissa.crc-sas.org/monitoreo/indice-de-estres-evaporativo

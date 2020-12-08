@@ -1,0 +1,522 @@
+---
+title: "Introducción a uso de API para SISSA"
+subtitle: "Documentación de acceso programático (API) y ejemplos en lenguaje R"
+author:
+  - Santiago Rovere (srovere@gmail.com)
+  - Daniel Bonhaure (danielbonhaure@gmail.com)
+  - Guillermo Podestá (gpodesta@rsmas.miami.edu)
+date: '`r format(as.Date("2020-10-30"), "%d de %B de %Y")`'
+output:
+  prettydoc::html_pretty:
+    css: styles.css
+    theme: cayman
+---
+
+# Introducción
+
+El presente documento tiene como propósito proveer algunos ejemplos de uso de la API de SISSA. El público al cual está destinado este documento está conformado por desarrolladores de software, programadores científicos o investigadores interesados en acceder a algunos de los datos del CRC-SAS. En cualquier caso, se asume que el lector tiene conocimientos previos de programación. 
+
+Este documento contiene solamente ejemplos de *algunos* de los servicios implementados en la API. Antes de comenzar a leer este documento, se recomienda haber leído previamente alguno de los manuales de referencia con ejemplos en R y Python:
+  
+  * R: https://github.com/CRC-SAS/web-services-R
+  * Python: https://github.com/CRC-SAS/web-services-python
+  
+# Pasos previos
+
+En primer lugar, definiremos primero algunas funciones de uso común que nos permitan agilizar la programación. Estas funciones además permitirán que el usuario no tenga que implementar por su cuenta algunas partes del código, por ejemplo la obtención de los datos, la autenticación o la conversión de los datos de salida a un formato que permita una sencilla manipulación subsiguiente de los mismos.
+
+Se comenzará por cargar todos los paquetes de R necesarios para poder ejecutar el código y los ejemplos provistos en adelante. Si alguno de estos paquetes no está instalado, los mismos deberán ser instalados por el usuario a fin de que el código pueda funcionar.
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE }
+# Carga de paquetes necesarios para hacer los requests a la API y graficar resultados
+require(Cairo)
+require(dplyr)
+require(geojsonsf)
+require(ggplot2)
+require(glue)
+require(gridExtra)
+require(httr)
+require(jsonlite)
+require(knitr)
+require(lubridate)
+require(ncdf4)
+require(prettydoc)
+require(raster)
+require(rgdal)
+require(tidyr)
+require(sf)
+```
+
+Luego, indicaremos que se utilice la librería Cairo para generar los gráficos que se muestran en los ejemplos.
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE }
+# Uso de paquete Cairo para generar gráficos
+options(bitmapType = "cairo")
+```
+
+A continuación, definiremos un set de funciones R útiles que le permitirán al usuario acceder a la API de una forma muy sencilla, sin tener que detenerse en detalles como la autenticación o la conversión de datos devueltos.
+
+```{r, echo = TRUE, warning = FALSE, message = FALSE }
+# Función para acceder a un servicio web definido por una URL utilizando el método GET.
+# Devuelve la respuesta como texto plano.
+ConsumirServicioGET <- function(url, usuario, clave) {
+  req  <- httr::GET(url = url, 
+                    config = httr::authenticate(user = usuario, 
+                                                password = clave))
+  return (httr::content(req, as = "text"))
+}
+
+# Función para acceder a un servicio web definido por una URL utilizando el método POST.
+# Devuelve la respuesta como raw.
+ConsumirServicioPOST <- function(url, usuario, clave, body) {
+  req  <- httr::POST(url = url, 
+                     config = httr::authenticate(user = usuario, 
+                                                 password = clave),
+                     body = body, encode = "json")
+  return (httr::content(req, as = "raw"))
+}
+
+# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
+# Asumiendo que la respuesta es un string JSON, hace la conversión del mismo a Data Frame.
+ConsumirServicioJSON <- function(url, usuario, clave) {
+  respuesta <- ConsumirServicioGET(url, usuario, clave)
+  return (jsonlite::fromJSON(respuesta))
+}
+
+# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
+# Se envía un archivo GeoJSON para realizar la consulta en un área determinada.
+# La respuesta se devuelve con un objeto de tipo raster.
+ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) {
+  # a. Obtener datos y guardarlos en un archivo temporal
+  zona.geojson     <- readr::read_file(file = archivo.geojson.zona)
+  respuesta        <- ConsumirServicioPOST(url = url, usuario = usuario, clave = clave,
+                                           body = list(zona.geojson = zona.geojson))
+  archivo.temporal <- base::tempfile("raster_ws_api")
+  un.archivo       <- base::file(archivo.temporal, "wb")
+  base::writeBin(respuesta, un.archivo)
+  close(un.archivo)
+  
+  # b. Obtener CRS y fechas del NetCDF
+  archivo.nc <- ncdf4::nc_open(filename = archivo.temporal)
+  prj4string <- ncdf4::ncatt_get(archivo.nc, 0, "crs")$value
+  fechas     <- NULL
+  tryCatch({
+    fechas <- as.Date(ncdf4::ncvar_get(archivo.nc, "time"), origin = as.Date("1970-01-01"))  
+  }, error = function(e) {
+    # No hay variable de tiempo porque es un solo layer. Poner como fecha el atributo start_date
+    fechas <<- as.Date(ncdf4::ncatt_get(archivo.nc, 0, "start_date")$value)
+  }, finally = { 
+    ncdf4::nc_close(archivo.nc)
+  })
+  
+  # c. Convertir a raster y borrar archivo temporal
+  un.raster <- raster::stack(x = archivo.temporal) %>%
+    raster::readAll()
+  raster::crs(un.raster) <- prj4string
+  if (raster::nlayers(un.raster) > 1) {
+    names(un.raster) <- as.character(fechas)
+  }
+  un.raster <- raster::setZ(un.raster, fechas)
+  file.remove(archivo.temporal)  
+  return (un.raster)
+}
+
+# Convierte una fecha a formato IS0 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el huso horario GMT-0.
+# Este es formato un estándar para representar fechas como una cadena de caracteres.
+ConvertirFechaISO8601 <- function(fecha) {
+  return (strftime(fecha, "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
+}
+
+### Funciones para el manejo de péntadas
+# Determina a qué pentada del año corresponde una fecha (1-72)
+FechaAPentadaAno <- function(fecha) {
+  dia         <- lubridate::day(fecha)
+  mes         <- lubridate::month(fecha)
+  pentada.mes <- ifelse(dia > 25, 6, ((dia - 1) %/% 5) + 1)
+  return (pentada.mes + 6 * (mes - 1))
+}
+
+# Determina a qué pentada del mes corresponde una fecha (1-6)
+FechaAPentadaMes <- function(fecha) {
+  pentada.ano <- FechaAPentadaAno(fecha)
+  return (((pentada.ano - 1) %% 6) + 1)
+}
+
+# Devuelve la fecha de inicio de una péntada de un añó determinado
+PentadaAnoAFechaInicio <- function(pentada.ano, ano) {
+  pentada.mes <- ((pentada.ano - 1) %% 6) + 1
+  dia         <- 1 + 5 * (pentada.mes - 1)
+  mes         <- ((pentada.ano - 1) %/% 6) + 1
+  return (as.Date(sprintf("%d-%d-%d", ano, mes, dia)))
+}
+
+# Obtener la fecha de inicio de péntada de una fecha determinada
+FechaInicioPentada <- function(fecha) {
+  pentada.mes <- FechaAPentadaMes(fecha)
+  dia.inicio  <- 1 + 5 * (pentada.mes - 1)
+  return (as.Date(sprintf("%d-%d-%d", lubridate::year(fecha), lubridate::month(fecha), dia.inicio)))
+}
+
+# Obtener la fecha de fin de péntada de una fecha determinada
+FechaFinPentada <- function(fecha) {
+  pentada.mes <- FechaAPentadaMes(fecha)
+  dia.fin     <- ifelse(pentada.mes < 6, 5 + 5 * (pentada.mes - 1), lubridate::days_in_month(fecha))
+  return (as.Date(sprintf("%d-%d-%d", lubridate::year(fecha), lubridate::month(fecha), dia.fin)))
+}
+```
+
+Además, a efecto de poder probar los ejemplos de esta documentación, se definen las siguientes variables (los datos de usuario y clave se encuentran ocultos por cuestiones de seguridad y deberán ser solicitados a las instituciones miembros del CRC-SAS):
+
+```{r, echo = FALSE}
+base.url        <- 'https://api.crc-sas.org/ws-api'
+usuario.default <- 'generico'
+clave.default   <- 'gen141co'
+```
+
+```{r, echo = TRUE, eval = FALSE}
+base.url        <- 'https://api.crc-sas.org/ws-api'
+usuario.default <- '********' 
+clave.default   <- '********'
+```
+
+La variable *base.url* representa la dirección URL base común a todos los servicios. Cada servicio está unívocamente identificado por una URL que se construye a partir de la URL base y una ruta (o ubicación) asociada al mismo. Esta construcción se hace mediante la concatenación de la URL base y la ruta. Cada servicio asociado a un conjunto de datos puede ser identificado unívocamente por una ruta. Las diferentes rutas se describen más abajo. A modo de ejemplo, para acceder al servicio de datos sobre estaciones se tomará la URL base (https://api.crc-sas.org/ws-api) y se la concatenará con la ruta de dicho servicio (/estaciones) resultando en la URL completa para este servicio (https://api.crc-sas.org/ws-api/estaciones). Las variables *usuario.default* y *clave.default* son las credenciales de acceso necesarias para poder realizar la autenticación y obtener los datos buscados.
+
+![](Estructura_URL.PNG)
+
+# Casos de uso
+
+A continuación se presentarán algunos problemas comunes y realistas a fin de ilustrar el uso de la API. Debe tenerse en cuenta que la elaboración de gráficos y mapas no forma parte del uso de la API, pero es parte necesaria para darle sentido al ejemplo.
+
+## __Problema 1__: Geolocalizar todas las estaciones meteorológicas de Argentina en un mapa. Identificar la estación Pehuajó (ID OMM 87544) y todas las estaciones geográficamente vecinas que se encuentren dentro de un radio de 300 kilómetros.
+
+Comenzamos por realizar la búsqueda de estaciones a través de la API. Esta es la porción de código correspondiente a la ejecución del servicio.
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+# 1. Búsqueda de estaciones de Argentina (AR, para otros países utilizar el código ISO de 2 letras correspondiente)
+url.estaciones <- glue::glue("{base.url}/estaciones/AR")
+estaciones     <- ConsumirServicioJSON(url = url.estaciones, 
+                                       usuario = usuario.default, 
+                                       clave = clave.default)
+
+# 2. Búsqueda de estaciones vecinas a Pehuajó (omm_id = 87544).
+#    Se buscan estaciones dentro de un radio de 300km.
+omm_central_id      <- 87544
+maxima_distancia_km <- 300
+url.vecinas         <- sprintf("%s/estaciones_vecinas/%d?max_distancia=%d",
+                               base.url, omm_central_id, maxima_distancia_km)
+estaciones.vecinas  <- ConsumirServicioJSON(url = url.vecinas, 
+                                            usuario = usuario.default, 
+                                            clave = clave.default) 
+
+# 3. Indico si la estación es Central (Pehuajó), Vecina u Otra
+estaciones <- estaciones %>%
+  dplyr::mutate(tipo = factor(dplyr::case_when(
+    # Si el ID es el mismo que el de la estación central, la defino como tal
+    omm_id == omm_central_id ~ "Central",
+    # Si el ID está dentro del conjunto de estaciones vecinas, es Vecina
+    omm_id %in% dplyr::pull(estaciones.vecinas, omm_id) ~ "Vecina",
+    # Sino, la defino como Otra
+    TRUE ~ "Otra"
+  ), levels = c("Central", "Vecina", "Otra")))
+```
+
+Una vez obtenidos los datos de estaciones de Argentina y vecinas de Pehuajó a través de la API, se elabora el mapa pedido. En el mismo se marca la estación Pehuajó con un color diferente, así como a sus vecinas.
+
+```{r, echo=TRUE, eval=TRUE, fig.width=9, fig.height=11}
+colores          <- c("#e41a1c", "#ff7f00", "#4daf4a")
+estacion.central <- dplyr::filter(estaciones, omm_id == omm_central_id)
+leaflet::leaflet(data = estaciones) %>%
+  leaflet::addTiles(urlTemplate = "//{s}.tiles.mapbox.com/v3/jcheng.map-5ebohr46/{z}/{x}/{y}.png") %>%
+  leaflet::setView(lat = -40, lng = -62, zoom = 5) %>%
+  leaflet::addCircles(data = estacion.central, lng = ~longitud, lat = ~latitud, fillColor = "#377eb8",
+                      color = "#377eb8", fillOpacity = 0.2, opacity = 0.8, weight = 1,
+                      radius = maxima_distancia_km * 1000) %>%
+  leaflet::addCircleMarkers(lat = ~latitud, lng = ~longitud, radius = 7, fillColor = ~colores[tipo],
+                            stroke = FALSE, fillOpacity = 0.8, opacity = 1, color = ~colores[tipo],
+                            popup = ~sprintf("<b>%s (%d)</b><br>Lat.: %.3f<br>Lon.: %.3f<br>Elev: %.0f m",
+                                             nombre, omm_id, latitud, longitud, elevacion))
+```
+
+## __Problema 2__: Buscar los valores de precipitación acumulada de 3 meses para los meses de *enero* a *marzo* de la estación Pehuajó. Utilizar el período de referencia 1971-2010 para ajustar una distribución no paramétrica a dichos valores.
+
+Comenzamos por buscar los valores de precipitación acumulada de *enero* a *marzo* para Pehuajó (87544) dentro del período de referencia solicitado. Para el caso de la precipitación acumulada debemos buscar el estadístico *Suma* (existen otros estadísticos como la media, la mediana, etc) para un ancho de ventana de 3 meses (lo que equivale a 18 péntadas, que es la unidad mínima de movilidad de la ventana). El servicio devolverá el estadístico *Suma* para la variable de precipitaciones (única variable para la cual se calcula). Posteriormente debemos quedarnos solamente con datos de precipitaciones que comiencen en el 1 de enero y finalicen el 31 de marzo.
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+omm_id           <- 87544
+ancho.ventana    <- 18
+fecha.desde      <- ConvertirFechaISO8601(as.Date("1971-01-01"))
+fecha.hasta      <- ConvertirFechaISO8601(as.Date("2010-12-31"))
+url.estadisticas <- sprintf("%s/estadisticas_moviles/%d/Suma/%d/%s/%s", base.url, omm_id,
+                            ancho.ventana, fecha.desde, fecha.hasta)
+estadisticas     <- ConsumirServicioJSON(url = url.estadisticas, 
+                                         usuario = usuario.default, 
+                                         clave = clave.default) %>%
+  dplyr::filter(lubridate::month(fecha_hasta) == 3 & lubridate::day(fecha_hasta) == 31)
+```
+
+Una vez obtenidos los 40 valores de precipitación acumulada de *enero* a *marzo* para el período de 1971-2010, realizamos el ajuste no paramétrico y generamos los conjuntos de datos necesarios para construir un histograma a partir de los datos originales, la función de densidad ajustada y un QQ-plot para comparar las distribuciones.
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+# 1. Histograma de datos originales
+set.seed(0)
+tamano.bin                  <- 50 # Ancho de cada intervalo
+tamano.muestra              <- nrow(estadisticas) # Cantidad de muestras
+area.total                  <- tamano.bin * tamano.muestra
+muestra.original            <- dplyr::pull(estadisticas, valor)
+histograma.datos.originales <- hist(x = muestra.original, plot = FALSE,
+                                    breaks = seq(from = 0, to = 900, by = tamano.bin))
+
+# 2. Ajuste no paramétrico y cálculo de función de densidad
+ajuste.no.parametrico       <- logspline::logspline(x = muestra.original, lbound = 0)
+datos.densidad              <- data.frame(x = histograma.datos.originales$mids) %>%
+  dplyr::mutate(densidad = logspline::dlogspline(q = x, fit = ajuste.no.parametrico))
+
+# 3. Cálculo de datos para QQ-Plot
+muestra.ajuste <- logspline::rlogspline(n = tamano.muestra, fit = ajuste.no.parametrico)
+datos.qq.plot  <- data.frame(x = sort(muestra.original), y = sort(muestra.ajuste))
+```
+
+Ahora procedemos a realizar los gráficos
+
+```{r, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, fig.width=12, fig.height=9}
+# 1. Histograma y densidad
+grafico1 <- ggplot2::ggplot() +
+  ggplot2::geom_bar(data = data.frame(x = histograma.datos.originales$mids, 
+                                      y = histograma.datos.originales$counts), 
+                    mapping = ggplot2::aes(x = x, y = y, fill = 'empirica'), 
+                    alpha = 0.8, stat = 'identity') +
+  ggplot2::geom_rug(data = data.frame(x = muestra.original), stat = 'identity',
+                    mapping = ggplot2::aes(x = x)) +
+  ggplot2::geom_line(data = datos.densidad, size = 1,
+                     mapping = ggplot2::aes(x = x, y = densidad*area.total, col = 'ajustada')) +
+  ggplot2::scale_y_continuous(sec.axis = 
+                                ggplot2::sec_axis(~./area.total, name = "Densidad de probabilidad")) +
+  ggplot2::scale_fill_manual(values = c("empirica" = "tomato"), labels = c("empirica" = "Empírica")) +
+  ggplot2::scale_colour_manual(values = c("ajustada" = "black"), labels = c("ajustada" = "Ajustada")) +
+  ggplot2::labs(x = "Precipitación acumulada", y = "Frecuencia", col = "Distribución", fill = "",
+                title = "Histograma de distribución empírica y función de densidad ajustada") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    legend.position = 'bottom'
+  )
+
+# 2. QQ-plot
+grafico2 <- ggplot2::ggplot(data = datos.qq.plot) +
+  ggplot2::geom_point(mapping = ggplot2::aes(x = x, y = y), colour = 'tomato') +
+  ggplot2::geom_abline(slope = 1, intercept = 0, colour = 'black') +
+  ggplot2::labs(x = "Datos originales", y = "Muestras según ajuste", 
+                title = "QQ-plot de datos originales y muestras según ajuste") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    legend.position = 'bottom',
+    aspect.ratio = 1
+  )
+
+# Organizar en grilla
+grilla.graficos <- gridExtra::grid.arrange(grobs=list(grafico1, grafico2), nrow=2)
+```
+
+## __Problema 3__: Obtener las series temporales de SPI-3 para Pehuajó (87544) calculado mediante un ajuste paramétrico de precipitaciones dentro del período de referencia 1971-2010, utilizando el método de máxima verosimilitud sin remuestreo. Graficar la serie para el período 2017-2019.
+
+Para iniciar este proceso primero obtenemos el listado de configuraciones de índices y seleccionamos SPI con escala de 3 meses. Encontramos que el ID de configuración es el 43.
+
+```{r, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+configuraciones <- ConsumirServicioJSON(url = paste0(base.url, "/indices_sequia_configuraciones"),
+                                        usuario = usuario.default, clave = clave.default) %>%
+  # Seleccionar SPI y escala de 3 meses
+  dplyr::filter(indice == "SPI" & escala == 3)
+knitr::kable(configuraciones)
+```
+
+Ahora procedemos a buscar la serie temporal de SPI-3 para Pehuajó entre 2017 y 2019.
+
+```{r, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+omm_id                  <- 87544
+indice_configuracion_id <- 43
+fecha.desde             <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.hasta             <- ConvertirFechaISO8601(as.Date("2019-12-31", tz = UTC))
+url.valores.indice      <- sprintf("%s/indices_sequia_valores/%d/%d/%s/%s", base.url, 
+                                   indice_configuracion_id, omm_id, fecha.desde, fecha.hasta)
+serie.temporal.spi      <- ConsumirServicioJSON(url = url.valores.indice,
+                                                usuario = usuario.default, clave = clave.default) %>%
+  # Definir la fecha de fin del período a partir del año y la péntada de fin
+  dplyr::mutate(fecha_fin_pentada = FechaFinPentada(PentadaAnoAFechaInicio(pentada_fin, ano)))
+```
+
+Finalmente, se grafican los valores de SPI-3 y los valores de precipitación acumulada que dieron origen a dichos índices.
+
+```{r, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+highcharter::highchart() %>%
+  highcharter::hc_add_series(data = serie.temporal.spi, type = "line", visible = TRUE, 
+                             showInLegend = TRUE, name = "SPI-3", zIndex = 2, 
+                             tooltip = list(valueSuffix = "", valueDecimals = 2),
+                             mapping = highcharter::hcaes(x = fecha_fin_pentada, y = valor_indice)) %>%
+  highcharter::hc_add_series(data = serie.temporal.spi, type = "column", visible = TRUE, zIndex = 1,
+                             tooltip = list(valueSuffix = "mm", valueDecimals = 0),
+                             showInLegend = FALSE, name = "Precipitación acumulada", yAxis = 1,
+                             mapping = highcharter::hcaes(x = fecha_fin_pentada, y = valor_dato)) %>%
+  highcharter::hc_xAxis(type = 'datetime', title = list(text = "Fecha de fin del período")) %>%
+  highcharter::hc_yAxis_multiples(
+    list(title = list(text = "SPI-3"), min = -3, max = 3),
+    list(opposite = TRUE, title = list(text = "Precipitación acumulada (mm)"), min = 0)
+  ) %>%
+  highcharter::hc_chart(type = 'line', zoomType = 'x', panning = TRUE, panKey = 'shift') %>%
+  highcharter::hc_legend(enabled = TRUE, layout = "horizontal") %>%
+  highcharter::hc_tooltip(shared = TRUE) %>%
+  highcharter::hc_colors(c("#fc8d62", "#a6cee3")) %>%
+  highcharter::hc_title(text = "SPI-3 para Pehuajó (Buenos Aires, Argentina)") %>%
+  highcharter::hc_exporting(enabled = TRUE, filename = "ESI time series") %>%
+  highcharter::hc_add_theme(highcharter::hc_theme_elementary()) %>%
+  highcharter::hc_plotOptions(
+    series = list(
+      marker = list(
+        enabled = TRUE,
+        symbol = 'diamond',
+        radius = 5,
+        lineWidth = 0,
+        states = list(
+          hover = list(
+            enabled = F
+          )
+        )
+      )
+    ),
+    column = list(
+      borderWidth = 0
+    )
+  )
+```
+
+## __Problema 4__: Obtener el SPI-3 basado en CHIRPS para Uruguay. Los valores de SPI-3 deben corresponder al período enero a marzo de 2019.
+
+El primer paso de la resolución consiste en descargar los datos de SPI-3 basados en CHIRPS. Para ello, debemos proveer un archivo GeoJSON que defina el área de interés a fin de acotar la descarga de datos. También debemos definir el período. En este caso, la fecha de inicio es igual a la fecha de fin porque se va a descargar una sola imagen.
+
+```{r, echo=TRUE, eval=TRUE}
+fecha.desde   <- ConvertirFechaISO8601(as.Date("2019-03-31", tz = UTC))
+fecha.hasta   <- ConvertirFechaISO8601(as.Date("2019-03-31", tz = UTC))
+url.chirps    <- glue::glue("{base.url}/chirps/spi/3/{fecha.desde}/{fecha.hasta}")
+raster.chirps <- ConsumirServicioEspacial(url = url.chirps, usuario = usuario.default, 
+                                          clave = clave.default,
+                                          archivo.geojson.zona = "Uruguay.geojson")
+```
+
+Ahora que ya descargamos el *raster* de SPI-3, se puede proyectar el mismo sobre un mapa.
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE, fig.width=9, fig.height=11}
+paleta.colores <- leaflet::colorBin(palette = "BrBG", domain = raster::values(raster.chirps),
+                                    na.color = "transparent", 
+                                    bins = c(-3, -1.5, -1, -0.5, 0.5, 1, 1.5, 3))
+leaflet::leaflet() %>%
+  leaflet::addTiles(urlTemplate = "//{s}.tiles.mapbox.com/v3/jcheng.map-5ebohr46/{z}/{x}/{y}.png") %>%
+  leaflet::setView(lat = -32, lng = -55, zoom = 7) %>%
+  leaflet::addRasterImage(x = raster.chirps[[1]], colors = paleta.colores) %>%
+  leaflet::addLegend(position = "bottomright", pal = paleta.colores, 
+                     values = raster::values(raster.chirps), title = "SPI-3")
+```
+
+### __Ejercicio de práctica__: Obtener las series temporales de SPI-3 para Durazno (Uruguay) (86530) y las estaciones geográficamente vecinas dentro de un radio de 150 kilómetros. Buscar los datos de SPI-3 calculado mediante un ajuste no paramétrico de precipitaciones dentro del período de referencia 1971-2010. Graficar las series para el período 2017-2019.
+
+Este problema puede verse como una combinación de los problemas (1) y (3) planteados previamente. El primer paso consiste en encontrar las estaciones geográficamente vecinas a Durazno dentro de un radio de 150 kilómetros, para lo cual se procede de la siguiente manera:
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+# 1. Búsqueda de estaciones vecinas a Durazno (omm_id = 86530).
+#    Se buscan estaciones dentro de un radio de 150km.
+omm_central_id      <- 86530
+maxima_distancia_km <- 150
+url.vecinas         <- sprintf("%s/estaciones_vecinas/%d?max_distancia=%d",
+                               base.url, omm_central_id, maxima_distancia_km)
+estaciones.vecinas  <- ConsumirServicioJSON(url = url.vecinas, 
+                                            usuario = usuario.default, 
+                                            clave = clave.default) 
+
+# 2. Agregamos Durazno 
+estaciones <- dplyr::bind_rows(
+  data.frame(omm_id = 86530, nombre = "Durazno"),
+  dplyr::select(estaciones.vecinas, omm_id, nombre)
+)
+
+# 3. Listamos esas estaciones
+knitr::kable(estaciones)
+```
+
+El próximo paso debería ser buscar los datos de SPI-3 para las estaciones especificadas. Sin embargo, previamente a eso se debe buscar la configuración de cálculo correspondiente a SPI-3 ajustado de forma no paramétrico. Se procede entonces a realizar dicha búsqueda.
+
+```{r, echo=TRUE, eval=TRUE, message=FALSE, warning=FALSE}
+configuraciones <- ConsumirServicioJSON(url = paste0(base.url, "/indices_sequia_configuraciones"),
+                                        usuario = usuario.default, clave = clave.default) %>%
+  # Seleccionar SPI y escala de 3 meses
+  dplyr::filter(indice == "SPI" & escala == 3)
+knitr::kable(configuraciones)
+```
+
+Ya tenemos los ID OMM de las estaciones especificadas y el ID de la configuración de cálculo del índice. Ahora se procede a buscar los valores de SPI-3 pedidos de a una estación por vez.
+
+```{r eval=TRUE, echo=TRUE, message=FALSE, warning=FALSE}
+series.temporales       <- NULL
+indice_configuracion_id <- 3
+fecha.desde             <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.hasta             <- ConvertirFechaISO8601(as.Date("2019-12-31", tz = UTC))
+for (omm_seleccionada_id in dplyr::pull(estaciones, omm_id)) {
+  # Se selecciona el nombre de la estación
+  nombre.estacion         <- estaciones %>%
+    dplyr::filter(omm_id == omm_seleccionada_id) %>%
+    dplyr::pull(nombre)
+  
+  # Ahora se define la URL para realizar la búsqueda
+  url.valores.indice      <- sprintf("%s/indices_sequia_valores/%d/%d/%s/%s", base.url, 
+                                     indice_configuracion_id, omm_seleccionada_id, 
+                                     fecha.desde, fecha.hasta)
+  
+  # Buscar serie temporal y agregar el nombre de la estacion (con ID)
+  serie.temporal.spi <- ConsumirServicioJSON(url = url.valores.indice,
+                                             usuario = usuario.default, clave = clave.default) %>%
+    # Definir la fecha de fin del período a partir del año y la péntada de fin
+    # Agregar nombre para el gráfico
+    dplyr::mutate(fecha_fin_pentada = FechaFinPentada(PentadaAnoAFechaInicio(pentada_fin, ano)),
+                  nombre_completo = paste0(nombre.estacion, " (", omm_id, ")"))
+    
+  # Agregar filas a data frame de todas las series temporales
+  series.temporales <- dplyr::bind_rows(series.temporales, serie.temporal.spi)
+}
+```
+
+Finalmente, se muestan las series temporales de SPI-3 en un gráfico.
+
+```{r, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+highcharter::highchart() %>%
+  highcharter::hc_add_series(data = series.temporales, type = "line", visible = TRUE, 
+                             showInLegend = TRUE, zIndex = 2, 
+                             tooltip = list(valueSuffix = "", valueDecimals = 2),
+                             mapping = highcharter::hcaes(x = fecha_fin_pentada, y = valor_indice, 
+                                                          group = nombre_completo)) %>%
+  highcharter::hc_xAxis(type = 'datetime', title = list(text = "Fecha de fin del período")) %>%
+  highcharter::hc_yAxis(title = list(text = "SPI-3")) %>%
+  highcharter::hc_chart(type = 'line', zoomType = 'x', panning = TRUE, panKey = 'shift') %>%
+  highcharter::hc_colors(c('#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f','#ff7f00','#cab2d6','#6a3d9a','#ffff99','#b15928')) %>%
+  highcharter::hc_legend(enabled = TRUE, layout = "horizontal") %>%
+  highcharter::hc_tooltip(shared = TRUE) %>%
+  highcharter::hc_title(text = "Series temporales de SPI-3") %>%
+  highcharter::hc_subtitle(text = "Durazno (UY) y estaciones dentro de un radio de 100 kms.") %>%
+  highcharter::hc_exporting(enabled = TRUE, filename = "ESI time series") %>%
+  highcharter::hc_add_theme(highcharter::hc_theme_elementary()) %>%
+  highcharter::hc_plotOptions(
+    series = list(
+      marker = list(
+        enabled = TRUE,
+        symbol = 'diamond',
+        radius = 5,
+        lineWidth = 0,
+        states = list(
+          hover = list(
+            enabled = F
+          )
+        )
+      )
+    ),
+    column = list(
+      borderWidth = 0
+    )
+  )
+```

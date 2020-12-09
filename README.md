@@ -8,7 +8,7 @@
 
 #### Guillermo Podestá (<gpodesta@rsmas.miami.edu>)
 
-#### 08 de diciembre de 2020
+#### 09 de diciembre de 2020
 
 # 1\. Introducción
 
@@ -26,18 +26,19 @@ El público al cual está destinado este documento está conformado por
 desarrolladores de software, programadores científicos o investigadores
 interesados en acceder a algunos de los datos del CRC-SAS. En cualquier
 caso, se asume que el lector tiene conocimientos previos de
-programación. La provisión de datos por parte del CRC-SAS se hace a
-través de lo que se llama API (**A**pplication **P**rogramming
-**I**nterface), que ofrece una una forma de comunicarse e interactuar
-con un servidor computacional remoto para acceder a datos almacenados en
-ese servidor. Una API generalmente involucra un conjunto de funciones
-que se proveen a fin de ser utilizadas por otro software implementado
-por el usuario \[1\]. El acceso a esta API no es interactivo ni a través
-de una interfaz gráfica, sino programático (o sea, a través de un código
-implementado en un lenguaje de programación). Es importante destacar
-también que la API que se describe aquí es un prototipo experimental,
-por lo que está sujeta a posibles modificaciones sustanciales en su
-funcionamiento.
+programación.
+
+La provisión de datos por parte del CRC-SAS se hace a través de lo que
+se llama API (**A**pplication **P**rogramming **I**nterface), que ofrece
+una una forma de comunicarse e interactuar con un servidor computacional
+remoto para acceder a datos almacenados en ese servidor. Una API
+generalmente involucra un conjunto de funciones que se proveen a fin de
+ser utilizadas por otro software implementado por el usuario \[1\]. El
+acceso a esta API no es interactivo ni a través de una interfaz gráfica,
+sino programático (o sea, a través de un código implementado en un
+lenguaje de programación). Es importante destacar también que la API que
+se describe aquí es un prototipo experimental, por lo que está sujeta a
+posibles modificaciones sustanciales en su funcionamiento.
 
 # 2\. Conjuntos de datos disponibles en el CRC-SAS
 
@@ -1578,8 +1579,8 @@ ggplot2::ggplot(data = datos.chirps) +
                                 na.value = "white", guide = "colourbar", aesthetics = "fill") +
   ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
   ggplot2::labs(x = "", y = "", fill = "",
-                title = "SPI basado en CHIRPS para Paysandú y Durazno (Uruguay)",
-                subtitle = "Valores correspondientes a SPI-3 para Enero de 2018") +
+                title = "SPI-3 basado en CHIRPS para Paysandú y Durazno (Uruguay)",
+                subtitle = "Valores correspondientes a péntada 26-31 de Enero de 2018") +
   ggplot2::theme_bw() +
   ggplot2::theme(
     legend.position = 'bottom',
@@ -1594,7 +1595,7 @@ ggplot2::ggplot(data = datos.chirps) +
 
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
 
-### Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
+### 4.7.3. Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
 
 La evolución esperada de la sequía en las próximas dos semanas se basa
 en un pronóstico de lluvias para los proximos 15 días generado por el
@@ -1729,7 +1730,7 @@ ggplot2::ggplot(data = datos.chirps.gefs) +
 
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
 
-## Índice de Stress Evaporativo (ESI) y percentiles derivados
+## 4.8. Índice de Stress Evaporativo (ESI) y percentiles derivados
 
 El Índice de Estrés Evaporativo (o, en adelante, ESI por sus siglas en
 inglés) identifica regiones donde la vegetación está sufriendo estrés

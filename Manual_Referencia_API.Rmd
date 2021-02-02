@@ -11,7 +11,7 @@ output:
 #### Santiago Rovere (srovere@gmail.com)
 #### Daniel Bonhaure (danielbonhaure@gmail.com)
 #### Guillermo Podestá (gpodesta@rsmas.miami.edu)
-#### 09 de diciembre de 2020
+#### 01 de febrero de 2021
 
 
 # 1. Introducción
@@ -94,12 +94,10 @@ ConsumirServicioGET <- function(url, usuario, clave) {
 
 # Función para acceder a un servicio web definido por una URL utilizando el método POST.
 # Devuelve la respuesta como raw.
-ConsumirServicioPOST <- function(url, usuario, clave, body) {
-  req  <- httr::POST(url = url, 
-                     config = httr::authenticate(user = usuario, 
-                                                 password = clave),
-                     body = body, encode = "json")
-  return (httr::content(req, as = "raw"))
+ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
+  req  <- httr::POST(url = url, body = body, encode = "json", 
+                     config = httr::authenticate(user = usuario, password = clave))
+  return (httr::content(req, as = return.type))
 }
 
 # Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
@@ -147,6 +145,18 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
   return (un.raster)
 }
 
+# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
+# Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
+# La respuesta se devuelve con un Data Frame.
+ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.geojson.zona) {
+  # a. Obtener datos y guardarlos en un archivo temporal
+  zona.geojson <- readr::read_file(file = archivo.geojson.zona)
+  respuesta    <- ConsumirServicioPOST(url = url, usuario = usuario, clave = clave,
+                                       body = list(zona.geojson = zona.geojson),
+                                       return.type = "text")
+  return (jsonlite::fromJSON(respuesta))
+}
+
 # Convierte una fecha a formato IS0 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el huso horario GMT-0.
 # Este es formato un estándar para representar fechas como una cadena de caracteres [7].
 ConvertirFechaISO8601 <- function(fecha) {
@@ -158,7 +168,7 @@ Además, a efecto de poder probar los ejemplos de esta documentación, se define
 
 ```{r, echo = FALSE}
 base.url        <- 'https://api.crc-sas.org/ws-api'
-usuario.default <- '********' 
+usuario.default <- '********'
 clave.default   <- '********'
 ```
 
@@ -981,6 +991,82 @@ ggplot2::ggplot(data = datos.ndvi) +
   )
 ```
 
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /indices_vegatacion/serie_temporal/{indice}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * indice: índice de vegetación a consultar (ndvi o evi); 
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa una provincia de Argentina. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar NDVI para Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.modis   <- glue::glue("{base.url}/indices_vegetacion/serie_temporal/ndvi/{fecha.desde}/{fecha.hasta}")
+datos.ndvi  <- ConsumirServicioEspacialSerieTemporal(url = url.modis, 
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.ndvi)
+```
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y Córdoba).
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar NDVI para la primera quincena de Enero de 2019 en 3 provincias puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.modis   <- glue::glue("{base.url}/indices_vegetacion/serie_temporal/ndvi/{fecha.desde}/{fecha.hasta}")
+datos.ndvi  <- ConsumirServicioEspacialSerieTemporal(url = url.modis, 
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.ndvi)
+```
+
 ## 4.7. Precipitaciones estimadas por el producto CHIRPS
 
 ### 4.7.1. Totales de precipitación por péntada y por mes
@@ -1059,6 +1145,82 @@ ggplot2::ggplot(data = datos.chirps) +
     axis.text.y = ggplot2::element_blank(),
     axis.ticks.y = ggplot2::element_blank()
   )
+```
+
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /chirps/serie_temporal/{periodo}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * periodo: período de agregación temporal de los datos (P: péntadas o M: mes); 
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa una provincia de Argentina. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar precipitación acumulada mensual para el primer trimestre de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-03-31", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/M/{fecha.desde}/{fecha.hasta}")
+datos.prcp  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.prcp)
+```
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y Córdoba).
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar precipitación acumulada mensual para el primer bimestre de 2019 en 3 provincias Argentinas
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-02-28", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/M/{fecha.desde}/{fecha.hasta}")
+datos.prcp  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.prcp)
 ```
 
 ### 4.7.2. Índices de sequía basados en precipitaciones estimadas usando el producto CHIRPS
@@ -1142,6 +1304,83 @@ ggplot2::ggplot(data = datos.chirps) +
     axis.text.y = ggplot2::element_blank(),
     axis.ticks.y = ggplot2::element_blank()
   )
+```
+
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /chirps/serie_temporal/{producto:string}/{escala:int}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { spi = SPI, percentile = percentil asociado al monto de precipitaciones acumuladas en el período };
+  * escala: escala temporal "ET" de agregación (en meses; 3, 6 o 12) del índice de sequía SPI o percentil;
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa una provincia de Argentina. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SPI-3 para las primeras 3 péntadas de Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/spi/3/{fecha.desde}/{fecha.hasta}")
+datos.spi3  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.spi3)
+```
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y Córdoba).
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SPI-3 para las primeras 2 péntadas de Enero de 2019 en 3 provincias Argentinas
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-10", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/spi/3/{fecha.desde}/{fecha.hasta}")
+datos.spi3  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.spi3)
 ```
 
 ### 4.7.3. Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
@@ -1312,6 +1551,83 @@ ggplot2::ggplot(data = datos.esi) +
     axis.text.y = ggplot2::element_blank(),
     axis.ticks.y = ggplot2::element_blank()
   )
+```
+
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /esi/serie_temporal/{producto:string}/{escala:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { esi = índice ESI, percentiles = percentils asociado índice ESI };
+  * escala: escala temporal "ET" de agregación del ESI o percentiles { 4WK = 4 semanas, 12WK = 12 semanas };
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa una provincia de Argentina. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar ESI con escala de agregación de 4 semanas para Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.esi     <- glue::glue("{base.url}/esi/serie_temporal/esi/4WK/{fecha.desde}/{fecha.hasta}")
+datos.esi   <- ConsumirServicioEspacialSerieTemporal(url = url.esi,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.esi)
+```
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y Córdoba).
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar ESI con escala de agregación de 4 semanas para la primera quincena de Enero de 2019 en 3 provincias puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.esi     <- glue::glue("{base.url}/esi/serie_temporal/esi/4WK/{fecha.desde}/{fecha.hasta}")
+datos.esi   <- ConsumirServicioEspacialSerieTemporal(url = url.esi,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.esi)
 ```
 
 # Referencias

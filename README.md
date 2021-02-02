@@ -8,7 +8,7 @@
 
 #### Guillermo Podestá (<gpodesta@rsmas.miami.edu>)
 
-#### 09 de diciembre de 2020
+#### 01 de febrero de 2021
 
 # 1\. Introducción
 
@@ -153,12 +153,10 @@ ConsumirServicioGET <- function(url, usuario, clave) {
 
 # Función para acceder a un servicio web definido por una URL utilizando el método POST.
 # Devuelve la respuesta como raw.
-ConsumirServicioPOST <- function(url, usuario, clave, body) {
-  req  <- httr::POST(url = url, 
-                     config = httr::authenticate(user = usuario, 
-                                                 password = clave),
-                     body = body, encode = "json")
-  return (httr::content(req, as = "raw"))
+ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
+  req  <- httr::POST(url = url, body = body, encode = "json", 
+                     config = httr::authenticate(user = usuario, password = clave))
+  return (httr::content(req, as = return.type))
 }
 
 # Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
@@ -204,6 +202,18 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
   un.raster <- raster::setZ(un.raster, fechas)
   file.remove(archivo.temporal)  
   return (un.raster)
+}
+
+# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
+# Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
+# La respuesta se devuelve con un Data Frame.
+ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.geojson.zona) {
+  # a. Obtener datos y guardarlos en un archivo temporal
+  zona.geojson <- readr::read_file(file = archivo.geojson.zona)
+  respuesta    <- ConsumirServicioPOST(url = url, usuario = usuario, clave = clave,
+                                       body = list(zona.geojson = zona.geojson),
+                                       return.type = "text")
+  return (jsonlite::fromJSON(respuesta))
 }
 
 # Convierte una fecha a formato IS0 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el huso horario GMT-0.
@@ -1045,7 +1055,7 @@ knitr::kable(spi.3.ultimo, digits = 2)
 
 | indice\_configuracion\_id | omm\_id | pentada\_fin |  ano | metodo\_imputacion\_id | valor\_dato | valor\_indice | percentil\_dato |
 | ------------------------: | ------: | -----------: | ---: | ---------------------: | ----------: | ------------: | --------------: |
-|                        43 |   87544 |           67 | 2020 |                      0 |       220.1 |        \-0.63 |           26.33 |
+|                        43 |   87544 |            5 | 2021 |                      0 |       175.8 |        \-1.86 |            3.12 |
 
 ### 4.4.3. Parámetros y otros valores resultantes del ajuste de distribuciones
 
@@ -1365,6 +1375,182 @@ ggplot2::ggplot(data = datos.ndvi) +
 
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-20-1.png" style="display: block; margin: auto;" />
 
+Además de poder descargar este producto en formato *raster*, también es
+posible extraer series temporales de valores para un conjunto de puntos
+(uno o más) o polígonos (uno o más). En el caso de la extracción para un
+conjunto de puntos, la respuesta devuelta por el servicio es una serie
+temporal de valores para cada punto dentro del rango de fechas
+especificado. En el caso de que la extracción sea realizada para un
+conjunto de polígonos, la respuesta devuelta por el servicio es una
+serie temporal de *estadísticos* (media, mediana, desvío estándar,
+desviación mediana absoluta, mínimo, máximo y los percentiles
+correspondientes al 25% y 75%) para cada polígono dentro del rango de
+fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON \[17\].
+Además, cada punto o polígono debe tener asociado al menos un atributo
+para que el servicio pueda devolver una respuesta en la cual se puedan
+identificar cada una de las geometrías (puntos o polígonos). Por
+ejemplo, en caso de que los polígonos correspondan a localidades, el
+archivo GeoJSON podría contener atributos indicando el código de
+localidad o su nombre. Para el caso de los puntos, se podría indicar un
+nombre asociado a cada una de las ubicaciones, un código o los atributos
+que el usuario desee agregar.
+
+*Ruta*:
+/indices\_vegatacion/serie\_temporal/{indice}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - indice: índice de vegetación a consultar (ndvi o evi);
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa los puntos o
+    polígonos sobre los cuales se efectuará la consulta.
+
+*Respuesta*:
+
+El servicio devuelve una respuesta en formato JSON, la cual puede
+convertirse a un formato tabular. La respuesta contiene los datos
+provistos por el usuario para cada una de las geometrías y los
+siguientes campos, según el usuario haya especificado puntos o
+polígonos:
+
+\[ { … <atributos provistos por el usuario para cada punto o polígono>
+…, estadístico: string (solamente para el caso de polígonos, ver
+detalle a continuación), fecha: date (fecha dentro del rango de fechas
+especificadas por el usuario), valor: float (valor asociado al punto o
+polígono para la fecha especificada - y al estadístico en el caso de
+polígonos) }\]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los
+polígonos se codifican de la siguiente manera:
+
+  - 0%: mínimo valor dentro del polígono
+  - 25%: percentil 25 de los valores dentro del polígono
+  - 50%: mediana de los valores dentro del polígono
+  - 75%: percentil 75 de los valores dentro del polígono
+  - 100%: máximo valor dentro del polígono
+  - Media: media de los valores dentro del polígono
+  - Desvio: desvío estándar de los valores dentro del polígono
+  - MAD: desvío mediano absoluto de los valores dentro del polígono
+
+A continuación se presentan dos ejemplos: una consulta para puntos y
+otra para polígonos. Para la consulta basada en puntos, cada uno de
+ellos tiene asociado un nombre que identifica la ubicación. Para el caso
+de los polígonos, cada uno de ellos tiene asociado un nombre que
+representa una provincia de Argentina. Se presenta primero el ejemplo
+para ubicaciones puntuales.
+
+``` r
+# Buscar NDVI para Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.modis   <- glue::glue("{base.url}/indices_vegetacion/serie_temporal/ndvi/{fecha.desde}/{fecha.hasta}")
+datos.ndvi  <- ConsumirServicioEspacialSerieTemporal(url = url.modis, 
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.ndvi)
+```
+
+| nombre  | fecha      |  valor |
+| :------ | :--------- | -----: |
+| Lugar 1 | 2019-01-01 | 0.7364 |
+| Lugar 1 | 2019-01-09 | 0.7958 |
+| Lugar 1 | 2019-01-17 | 0.8067 |
+| Lugar 1 | 2019-01-25 | 0.8348 |
+| Lugar 2 | 2019-01-01 | 0.6335 |
+| Lugar 2 | 2019-01-09 | 0.8109 |
+| Lugar 2 | 2019-01-17 | 0.8450 |
+| Lugar 2 | 2019-01-25 | 0.8975 |
+| Lugar 3 | 2019-01-01 | 0.6556 |
+| Lugar 3 | 2019-01-09 | 0.6808 |
+| Lugar 3 | 2019-01-17 | 0.6767 |
+| Lugar 3 | 2019-01-25 | 0.7233 |
+| Lugar 4 | 2019-01-01 | 0.5909 |
+| Lugar 4 | 2019-01-09 | 0.6446 |
+| Lugar 4 | 2019-01-17 | 0.6674 |
+| Lugar 4 | 2019-01-25 | 0.6883 |
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a
+zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y
+Córdoba).
+
+``` r
+# Buscar NDVI para la primera quincena de Enero de 2019 en 3 provincias puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.modis   <- glue::glue("{base.url}/indices_vegetacion/serie_temporal/ndvi/{fecha.desde}/{fecha.hasta}")
+datos.ndvi  <- ConsumirServicioEspacialSerieTemporal(url = url.modis, 
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.ndvi)
+```
+
+| nombre       | estadistico | fecha      |    valor |
+| :----------- | :---------- | :--------- | -------: |
+| Buenos Aires | 0%          | 2019-01-01 |   0.0161 |
+| Buenos Aires | 25%         | 2019-01-01 |   0.6263 |
+| Buenos Aires | 50%         | 2019-01-01 |   0.6876 |
+| Buenos Aires | 75%         | 2019-01-01 |   0.7403 |
+| Buenos Aires | 100%        | 2019-01-01 |   0.9223 |
+| Buenos Aires | Media       | 2019-01-01 |   0.6753 |
+| Buenos Aires | Desvio      | 2019-01-01 |   0.0987 |
+| Buenos Aires | MAD         | 2019-01-01 |   0.0835 |
+| Buenos Aires | 0%          | 2019-01-09 | \-0.1545 |
+| Buenos Aires | 25%         | 2019-01-09 |   0.6678 |
+| Buenos Aires | 50%         | 2019-01-09 |   0.7245 |
+| Buenos Aires | 75%         | 2019-01-09 |   0.7758 |
+| Buenos Aires | 100%        | 2019-01-09 |   0.9213 |
+| Buenos Aires | Media       | 2019-01-09 |   0.7133 |
+| Buenos Aires | Desvio      | 2019-01-09 |   0.0965 |
+| Buenos Aires | MAD         | 2019-01-09 |   0.0800 |
+| Cordoba      | 0%          | 2019-01-01 | \-0.1411 |
+| Cordoba      | 25%         | 2019-01-01 |   0.5256 |
+| Cordoba      | 50%         | 2019-01-01 |   0.6133 |
+| Cordoba      | 75%         | 2019-01-01 |   0.7165 |
+| Cordoba      | 100%        | 2019-01-01 |   0.9243 |
+| Cordoba      | Media       | 2019-01-01 |   0.6191 |
+| Cordoba      | Desvio      | 2019-01-01 |   0.1280 |
+| Cordoba      | MAD         | 2019-01-01 |   0.1402 |
+| Cordoba      | 0%          | 2019-01-09 | \-0.0588 |
+| Cordoba      | 25%         | 2019-01-09 |   0.6085 |
+| Cordoba      | 50%         | 2019-01-09 |   0.7056 |
+| Cordoba      | 75%         | 2019-01-09 |   0.7829 |
+| Cordoba      | 100%        | 2019-01-09 |   0.9362 |
+| Cordoba      | Media       | 2019-01-09 |   0.6902 |
+| Cordoba      | Desvio      | 2019-01-09 |   0.1195 |
+| Cordoba      | MAD         | 2019-01-09 |   0.1261 |
+| Uruguay      | 0%          | 2019-01-01 | \-0.1690 |
+| Uruguay      | 25%         | 2019-01-01 |   0.6430 |
+| Uruguay      | 50%         | 2019-01-01 |   0.6880 |
+| Uruguay      | 75%         | 2019-01-01 |   0.7278 |
+| Uruguay      | 100%        | 2019-01-01 |   0.8817 |
+| Uruguay      | Media       | 2019-01-01 |   0.6724 |
+| Uruguay      | Desvio      | 2019-01-01 |   0.1074 |
+| Uruguay      | MAD         | 2019-01-01 |   0.0623 |
+| Uruguay      | 0%          | 2019-01-09 | \-0.1945 |
+| Uruguay      | 25%         | 2019-01-09 |   0.6291 |
+| Uruguay      | 50%         | 2019-01-09 |   0.6660 |
+| Uruguay      | 75%         | 2019-01-09 |   0.6996 |
+| Uruguay      | 100%        | 2019-01-09 |   0.8687 |
+| Uruguay      | Media       | 2019-01-09 |   0.6570 |
+| Uruguay      | Desvio      | 2019-01-09 |   0.0912 |
+| Uruguay      | MAD         | 2019-01-09 |   0.0517 |
+
 ## 4.7. Precipitaciones estimadas por el producto CHIRPS
 
 ### 4.7.1. Totales de precipitación por péntada y por mes
@@ -1474,7 +1660,181 @@ ggplot2::ggplot(data = datos.chirps) +
   )
 ```
 
-<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-21-1.png" style="display: block; margin: auto;" />
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
+
+Además de poder descargar este producto en formato *raster*, también es
+posible extraer series temporales de valores para un conjunto de puntos
+(uno o más) o polígonos (uno o más). En el caso de la extracción para un
+conjunto de puntos, la respuesta devuelta por el servicio es una serie
+temporal de valores para cada punto dentro del rango de fechas
+especificado. En el caso de que la extracción sea realizada para un
+conjunto de polígonos, la respuesta devuelta por el servicio es una
+serie temporal de *estadísticos* (media, mediana, desvío estándar,
+desviación mediana absoluta, mínimo, máximo y los percentiles
+correspondientes al 25% y 75%) para cada polígono dentro del rango de
+fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON \[17\].
+Además, cada punto o polígono debe tener asociado al menos un atributo
+para que el servicio pueda devolver una respuesta en la cual se puedan
+identificar cada una de las geometrías (puntos o polígonos). Por
+ejemplo, en caso de que los polígonos correspondan a localidades, el
+archivo GeoJSON podría contener atributos indicando el código de
+localidad o su nombre. Para el caso de los puntos, se podría indicar un
+nombre asociado a cada una de las ubicaciones, un código o los atributos
+que el usuario desee agregar.
+
+*Ruta*:
+/chirps/serie\_temporal/{periodo}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - periodo: período de agregación temporal de los datos (P: péntadas o
+    M: mes);
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa los puntos o
+    polígonos sobre los cuales se efectuará la consulta.
+
+*Respuesta*:
+
+El servicio devuelve una respuesta en formato JSON, la cual puede
+convertirse a un formato tabular. La respuesta contiene los datos
+provistos por el usuario para cada una de las geometrías y los
+siguientes campos, según el usuario haya especificado puntos o
+polígonos:
+
+\[ { … <atributos provistos por el usuario para cada punto o polígono>
+…, estadístico: string (solamente para el caso de polígonos, ver
+detalle a continuación), fecha: date (fecha dentro del rango de fechas
+especificadas por el usuario), valor: float (valor asociado al punto o
+polígono para la fecha especificada - y al estadístico en el caso de
+polígonos) }\]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los
+polígonos se codifican de la siguiente manera:
+
+  - 0%: mínimo valor dentro del polígono
+  - 25%: percentil 25 de los valores dentro del polígono
+  - 50%: mediana de los valores dentro del polígono
+  - 75%: percentil 75 de los valores dentro del polígono
+  - 100%: máximo valor dentro del polígono
+  - Media: media de los valores dentro del polígono
+  - Desvio: desvío estándar de los valores dentro del polígono
+  - MAD: desvío mediano absoluto de los valores dentro del polígono
+
+A continuación se presentan dos ejemplos: una consulta para puntos y
+otra para polígonos. Para la consulta basada en puntos, cada uno de
+ellos tiene asociado un nombre que identifica la ubicación. Para el caso
+de los polígonos, cada uno de ellos tiene asociado un nombre que
+representa una provincia de Argentina. Se presenta primero el ejemplo
+para ubicaciones
+puntuales.
+
+``` r
+# Buscar precipitación acumulada mensual para el primer trimestre de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-03-31", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/M/{fecha.desde}/{fecha.hasta}")
+datos.prcp  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.prcp)
+```
+
+| nombre  | fecha      |    valor |
+| :------ | :--------- | -------: |
+| Lugar 1 | 2019-01-01 | 224.7498 |
+| Lugar 1 | 2019-02-01 |  74.8277 |
+| Lugar 1 | 2019-03-01 | 108.1354 |
+| Lugar 2 | 2019-01-01 | 157.6522 |
+| Lugar 2 | 2019-02-01 |  36.0004 |
+| Lugar 2 | 2019-03-01 | 193.0974 |
+| Lugar 3 | 2019-01-01 | 297.5936 |
+| Lugar 3 | 2019-02-01 |  89.1815 |
+| Lugar 3 | 2019-03-01 | 122.8924 |
+| Lugar 4 | 2019-01-01 | 136.7818 |
+| Lugar 4 | 2019-02-01 |  93.5325 |
+| Lugar 4 | 2019-03-01 |  93.7881 |
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a
+zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y
+Córdoba).
+
+``` r
+# Buscar precipitación acumulada mensual para el primer bimestre de 2019 en 3 provincias Argentinas
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-02-28", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/M/{fecha.desde}/{fecha.hasta}")
+datos.prcp  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.prcp)
+```
+
+| nombre       | estadistico | fecha      |    valor |
+| :----------- | :---------- | :--------- | -------: |
+| Buenos Aires | 0%          | 2019-01-01 | 173.0689 |
+| Buenos Aires | 25%         | 2019-01-01 | 192.7029 |
+| Buenos Aires | 50%         | 2019-01-01 | 199.9755 |
+| Buenos Aires | 75%         | 2019-01-01 | 213.9939 |
+| Buenos Aires | 100%        | 2019-01-01 | 267.4781 |
+| Buenos Aires | Media       | 2019-01-01 | 204.9081 |
+| Buenos Aires | Desvio      | 2019-01-01 |  17.5320 |
+| Buenos Aires | MAD         | 2019-01-01 |  13.5045 |
+| Buenos Aires | 0%          | 2019-02-01 |  39.7508 |
+| Buenos Aires | 25%         | 2019-02-01 |  62.7362 |
+| Buenos Aires | 50%         | 2019-02-01 |  68.8801 |
+| Buenos Aires | 75%         | 2019-02-01 |  74.0915 |
+| Buenos Aires | 100%        | 2019-02-01 |  85.9510 |
+| Buenos Aires | Media       | 2019-02-01 |  67.2280 |
+| Buenos Aires | Desvio      | 2019-02-01 |   9.2723 |
+| Buenos Aires | MAD         | 2019-02-01 |   8.2983 |
+| Cordoba      | 0%          | 2019-01-01 | 104.2619 |
+| Cordoba      | 25%         | 2019-01-01 | 141.1514 |
+| Cordoba      | 50%         | 2019-01-01 | 162.9541 |
+| Cordoba      | 75%         | 2019-01-01 | 182.1200 |
+| Cordoba      | 100%        | 2019-01-01 | 256.6184 |
+| Cordoba      | Media       | 2019-01-01 | 166.1185 |
+| Cordoba      | Desvio      | 2019-01-01 |  33.4216 |
+| Cordoba      | MAD         | 2019-01-01 |  31.4784 |
+| Cordoba      | 0%          | 2019-02-01 |  20.8781 |
+| Cordoba      | 25%         | 2019-02-01 |  37.7954 |
+| Cordoba      | 50%         | 2019-02-01 |  44.0428 |
+| Cordoba      | 75%         | 2019-02-01 |  53.4448 |
+| Cordoba      | 100%        | 2019-02-01 |  77.0143 |
+| Cordoba      | Media       | 2019-02-01 |  46.4813 |
+| Cordoba      | Desvio      | 2019-02-01 |  11.3705 |
+| Cordoba      | MAD         | 2019-02-01 |  11.0257 |
+| Uruguay      | 0%          | 2019-01-01 | 249.7942 |
+| Uruguay      | 25%         | 2019-01-01 | 292.1535 |
+| Uruguay      | 50%         | 2019-01-01 | 305.5407 |
+| Uruguay      | 75%         | 2019-01-01 | 318.2879 |
+| Uruguay      | 100%        | 2019-01-01 | 372.7469 |
+| Uruguay      | Media       | 2019-01-01 | 304.6796 |
+| Uruguay      | Desvio      | 2019-01-01 |  20.1602 |
+| Uruguay      | MAD         | 2019-01-01 |  19.6277 |
+| Uruguay      | 0%          | 2019-02-01 |  57.2918 |
+| Uruguay      | 25%         | 2019-02-01 |  75.8760 |
+| Uruguay      | 50%         | 2019-02-01 |  81.9168 |
+| Uruguay      | 75%         | 2019-02-01 |  91.9705 |
+| Uruguay      | 100%        | 2019-02-01 | 128.5148 |
+| Uruguay      | Media       | 2019-02-01 |  86.7375 |
+| Uruguay      | Desvio      | 2019-02-01 |  14.8448 |
+| Uruguay      | MAD         | 2019-02-01 |  10.0489 |
 
 ### 4.7.2. Índices de sequía basados en precipitaciones estimadas usando el producto CHIRPS
 
@@ -1593,7 +1953,183 @@ ggplot2::ggplot(data = datos.chirps) +
   )
 ```
 
-<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-22-1.png" style="display: block; margin: auto;" />
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-26-1.png" style="display: block; margin: auto;" />
+
+Además de poder descargar este producto en formato *raster*, también es
+posible extraer series temporales de valores para un conjunto de puntos
+(uno o más) o polígonos (uno o más). En el caso de la extracción para un
+conjunto de puntos, la respuesta devuelta por el servicio es una serie
+temporal de valores para cada punto dentro del rango de fechas
+especificado. En el caso de que la extracción sea realizada para un
+conjunto de polígonos, la respuesta devuelta por el servicio es una
+serie temporal de *estadísticos* (media, mediana, desvío estándar,
+desviación mediana absoluta, mínimo, máximo y los percentiles
+correspondientes al 25% y 75%) para cada polígono dentro del rango de
+fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON \[17\].
+Además, cada punto o polígono debe tener asociado al menos un atributo
+para que el servicio pueda devolver una respuesta en la cual se puedan
+identificar cada una de las geometrías (puntos o polígonos). Por
+ejemplo, en caso de que los polígonos correspondan a localidades, el
+archivo GeoJSON podría contener atributos indicando el código de
+localidad o su nombre. Para el caso de los puntos, se podría indicar un
+nombre asociado a cada una de las ubicaciones, un código o los atributos
+que el usuario desee agregar.
+
+*Ruta*:
+/chirps/serie\_temporal/{producto:string}/{escala:int}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - producto: { spi = SPI, percentile = percentil asociado al monto de
+    precipitaciones acumuladas en el período };
+  - escala: escala temporal “ET” de agregación (en meses; 3, 6 o 12) del
+    índice de sequía SPI o percentil;
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa los puntos o
+    polígonos sobre los cuales se efectuará la consulta.
+
+*Respuesta*:
+
+El servicio devuelve una respuesta en formato JSON, la cual puede
+convertirse a un formato tabular. La respuesta contiene los datos
+provistos por el usuario para cada una de las geometrías y los
+siguientes campos, según el usuario haya especificado puntos o
+polígonos:
+
+\[ { … <atributos provistos por el usuario para cada punto o polígono>
+…, estadístico: string (solamente para el caso de polígonos, ver
+detalle a continuación), fecha: date (fecha dentro del rango de fechas
+especificadas por el usuario), valor: float (valor asociado al punto o
+polígono para la fecha especificada - y al estadístico en el caso de
+polígonos) }\]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los
+polígonos se codifican de la siguiente manera:
+
+  - 0%: mínimo valor dentro del polígono
+  - 25%: percentil 25 de los valores dentro del polígono
+  - 50%: mediana de los valores dentro del polígono
+  - 75%: percentil 75 de los valores dentro del polígono
+  - 100%: máximo valor dentro del polígono
+  - Media: media de los valores dentro del polígono
+  - Desvio: desvío estándar de los valores dentro del polígono
+  - MAD: desvío mediano absoluto de los valores dentro del polígono
+
+A continuación se presentan dos ejemplos: una consulta para puntos y
+otra para polígonos. Para la consulta basada en puntos, cada uno de
+ellos tiene asociado un nombre que identifica la ubicación. Para el caso
+de los polígonos, cada uno de ellos tiene asociado un nombre que
+representa una provincia de Argentina. Se presenta primero el ejemplo
+para ubicaciones
+puntuales.
+
+``` r
+# Buscar SPI-3 para las primeras 3 péntadas de Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/spi/3/{fecha.desde}/{fecha.hasta}")
+datos.spi3  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.spi3)
+```
+
+| nombre  | fecha      |    valor |
+| :------ | :--------- | -------: |
+| Lugar 1 | 2019-01-01 |   0.4608 |
+| Lugar 1 | 2019-01-06 |   0.7708 |
+| Lugar 1 | 2019-01-11 |   1.0258 |
+| Lugar 2 | 2019-01-01 | \-0.1871 |
+| Lugar 2 | 2019-01-06 |   0.3659 |
+| Lugar 2 | 2019-01-11 |   0.4351 |
+| Lugar 3 | 2019-01-01 |   1.2455 |
+| Lugar 3 | 2019-01-06 |   1.4148 |
+| Lugar 3 | 2019-01-11 |   1.8160 |
+| Lugar 4 | 2019-01-01 |   0.9351 |
+| Lugar 4 | 2019-01-06 |   1.2654 |
+| Lugar 4 | 2019-01-11 |   1.9639 |
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a
+zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y
+Córdoba).
+
+``` r
+# Buscar SPI-3 para las primeras 2 péntadas de Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-10", tz = UTC))
+url.chirps  <- glue::glue("{base.url}/chirps/serie_temporal/spi/3/{fecha.desde}/{fecha.hasta}")
+datos.spi3  <- ConsumirServicioEspacialSerieTemporal(url = url.chirps,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.spi3)
+```
+
+| nombre       | estadistico | fecha      |    valor |
+| :----------- | :---------- | :--------- | -------: |
+| Buenos Aires | 0%          | 2019-01-01 | \-0.0780 |
+| Buenos Aires | 25%         | 2019-01-01 |   0.2517 |
+| Buenos Aires | 50%         | 2019-01-01 |   0.3980 |
+| Buenos Aires | 75%         | 2019-01-01 |   0.5374 |
+| Buenos Aires | 100%        | 2019-01-01 |   0.8423 |
+| Buenos Aires | Media       | 2019-01-01 |   0.3911 |
+| Buenos Aires | Desvio      | 2019-01-01 |   0.1849 |
+| Buenos Aires | MAD         | 2019-01-01 |   0.2142 |
+| Buenos Aires | 0%          | 2019-01-06 |   0.4098 |
+| Buenos Aires | 25%         | 2019-01-06 |   0.5933 |
+| Buenos Aires | 50%         | 2019-01-06 |   0.7258 |
+| Buenos Aires | 75%         | 2019-01-06 |   0.8388 |
+| Buenos Aires | 100%        | 2019-01-06 |   1.1238 |
+| Buenos Aires | Media       | 2019-01-06 |   0.7293 |
+| Buenos Aires | Desvio      | 2019-01-06 |   0.1654 |
+| Buenos Aires | MAD         | 2019-01-06 |   0.1805 |
+| Cordoba      | 0%          | 2019-01-01 | \-1.1062 |
+| Cordoba      | 25%         | 2019-01-01 | \-0.3529 |
+| Cordoba      | 50%         | 2019-01-01 |   0.1425 |
+| Cordoba      | 75%         | 2019-01-01 |   0.4282 |
+| Cordoba      | 100%        | 2019-01-01 |   1.2773 |
+| Cordoba      | Media       | 2019-01-01 |   0.0558 |
+| Cordoba      | Desvio      | 2019-01-01 |   0.5636 |
+| Cordoba      | MAD         | 2019-01-01 |   0.5220 |
+| Cordoba      | 0%          | 2019-01-06 | \-0.5794 |
+| Cordoba      | 25%         | 2019-01-06 |   0.1742 |
+| Cordoba      | 50%         | 2019-01-06 |   0.6288 |
+| Cordoba      | 75%         | 2019-01-06 |   0.9593 |
+| Cordoba      | 100%        | 2019-01-06 |   1.4607 |
+| Cordoba      | Media       | 2019-01-06 |   0.5502 |
+| Cordoba      | Desvio      | 2019-01-06 |   0.5007 |
+| Cordoba      | MAD         | 2019-01-06 |   0.5279 |
+| Uruguay      | 0%          | 2019-01-01 |   0.4794 |
+| Uruguay      | 25%         | 2019-01-01 |   0.5951 |
+| Uruguay      | 50%         | 2019-01-01 |   0.6368 |
+| Uruguay      | 75%         | 2019-01-01 |   0.6988 |
+| Uruguay      | 100%        | 2019-01-01 |   0.8053 |
+| Uruguay      | Media       | 2019-01-01 |   0.6487 |
+| Uruguay      | Desvio      | 2019-01-01 |   0.0750 |
+| Uruguay      | MAD         | 2019-01-01 |   0.0737 |
+| Uruguay      | 0%          | 2019-01-06 |   0.8694 |
+| Uruguay      | 25%         | 2019-01-06 |   0.9657 |
+| Uruguay      | 50%         | 2019-01-06 |   0.9973 |
+| Uruguay      | 75%         | 2019-01-06 |   1.0322 |
+| Uruguay      | 100%        | 2019-01-06 |   1.0960 |
+| Uruguay      | Media       | 2019-01-06 |   0.9979 |
+| Uruguay      | Desvio      | 2019-01-06 |   0.0461 |
+| Uruguay      | MAD         | 2019-01-06 |   0.0491 |
 
 ### 4.7.3. Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
 
@@ -1728,7 +2264,7 @@ ggplot2::ggplot(data = datos.chirps.gefs) +
   )
 ```
 
-<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-23-1.png" style="display: block; margin: auto;" />
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-29-1.png" style="display: block; margin: auto;" />
 
 ## 4.8. Índice de Stress Evaporativo (ESI) y percentiles derivados
 
@@ -1862,7 +2398,187 @@ ggplot2::ggplot(data = datos.esi) +
   )
 ```
 
-<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-24-1.png" style="display: block; margin: auto;" />
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-30-1.png" style="display: block; margin: auto;" />
+
+Además de poder descargar este producto en formato *raster*, también es
+posible extraer series temporales de valores para un conjunto de puntos
+(uno o más) o polígonos (uno o más). En el caso de la extracción para un
+conjunto de puntos, la respuesta devuelta por el servicio es una serie
+temporal de valores para cada punto dentro del rango de fechas
+especificado. En el caso de que la extracción sea realizada para un
+conjunto de polígonos, la respuesta devuelta por el servicio es una
+serie temporal de *estadísticos* (media, mediana, desvío estándar,
+desviación mediana absoluta, mínimo, máximo y los percentiles
+correspondientes al 25% y 75%) para cada polígono dentro del rango de
+fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON \[17\].
+Además, cada punto o polígono debe tener asociado al menos un atributo
+para que el servicio pueda devolver una respuesta en la cual se puedan
+identificar cada una de las geometrías (puntos o polígonos). Por
+ejemplo, en caso de que los polígonos correspondan a localidades, el
+archivo GeoJSON podría contener atributos indicando el código de
+localidad o su nombre. Para el caso de los puntos, se podría indicar un
+nombre asociado a cada una de las ubicaciones, un código o los atributos
+que el usuario desee agregar.
+
+*Ruta*:
+/esi/serie\_temporal/{producto:string}/{escala:string}/{fecha\_desde:date}/{fecha\_hasta:date}
+
+*Método*: POST
+
+*Parámetros*:
+
+  - producto: { esi = índice ESI, percentiles = percentils asociado
+    índice ESI };
+  - escala: escala temporal “ET” de agregación del ESI o percentiles {
+    4WK = 4 semanas, 12WK = 12 semanas };
+  - fecha\_desde: fecha de inicio del período a consultar (en formato
+    ISO-8601 \[20\]);
+  - fecha\_hasta: fecha de fin del período a consultar (en formato
+    ISO-8601 \[20\]).
+
+*Parámetros del cuerpo del request*:
+
+  - zona.geojson: string de formato GeoJSON que representa los puntos o
+    polígonos sobre los cuales se efectuará la consulta.
+
+*Respuesta*:
+
+El servicio devuelve una respuesta en formato JSON, la cual puede
+convertirse a un formato tabular. La respuesta contiene los datos
+provistos por el usuario para cada una de las geometrías y los
+siguientes campos, según el usuario haya especificado puntos o
+polígonos:
+
+\[ { … <atributos provistos por el usuario para cada punto o polígono>
+…, estadístico: string (solamente para el caso de polígonos, ver
+detalle a continuación), fecha: date (fecha dentro del rango de fechas
+especificadas por el usuario), valor: float (valor asociado al punto o
+polígono para la fecha especificada - y al estadístico en el caso de
+polígonos) }\]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los
+polígonos se codifican de la siguiente manera:
+
+  - 0%: mínimo valor dentro del polígono
+  - 25%: percentil 25 de los valores dentro del polígono
+  - 50%: mediana de los valores dentro del polígono
+  - 75%: percentil 75 de los valores dentro del polígono
+  - 100%: máximo valor dentro del polígono
+  - Media: media de los valores dentro del polígono
+  - Desvio: desvío estándar de los valores dentro del polígono
+  - MAD: desvío mediano absoluto de los valores dentro del polígono
+
+A continuación se presentan dos ejemplos: una consulta para puntos y
+otra para polígonos. Para la consulta basada en puntos, cada uno de
+ellos tiene asociado un nombre que identifica la ubicación. Para el caso
+de los polígonos, cada uno de ellos tiene asociado un nombre que
+representa una provincia de Argentina. Se presenta primero el ejemplo
+para ubicaciones
+puntuales.
+
+``` r
+# Buscar ESI con escala de agregación de 4 semanas para Enero de 2019 en 4 ubicaciones puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
+url.esi     <- glue::glue("{base.url}/esi/serie_temporal/esi/4WK/{fecha.desde}/{fecha.hasta}")
+datos.esi   <- ConsumirServicioEspacialSerieTemporal(url = url.esi,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.esi)
+```
+
+| nombre  | fecha      |  valor |
+| :------ | :--------- | -----: |
+| Lugar 1 | 2019-01-08 | 1.6678 |
+| Lugar 1 | 2019-01-15 | 1.7392 |
+| Lugar 1 | 2019-01-22 | 2.1009 |
+| Lugar 1 | 2019-01-29 | 2.7400 |
+| Lugar 2 | 2019-01-08 | 0.3689 |
+| Lugar 2 | 2019-01-15 | 1.2818 |
+| Lugar 2 | 2019-01-22 | 1.8459 |
+| Lugar 2 | 2019-01-29 | 1.6372 |
+| Lugar 3 | 2019-01-08 | 1.8288 |
+| Lugar 3 | 2019-01-15 | 1.9126 |
+| Lugar 3 | 2019-01-22 | 2.4142 |
+| Lugar 3 | 2019-01-29 | 3.3442 |
+| Lugar 4 | 2019-01-08 | 0.7941 |
+| Lugar 4 | 2019-01-15 | 2.6321 |
+| Lugar 4 | 2019-01-22 | 1.8936 |
+| Lugar 4 | 2019-01-29 | 1.8996 |
+
+Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a
+zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y
+Córdoba).
+
+``` r
+# Buscar ESI con escala de agregación de 4 semanas para la primera quincena de Enero de 2019 en 3 provincias puntuales
+fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
+url.esi     <- glue::glue("{base.url}/esi/serie_temporal/esi/4WK/{fecha.desde}/{fecha.hasta}")
+datos.esi   <- ConsumirServicioEspacialSerieTemporal(url = url.esi,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PoligonosEjemplo.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(datos.esi)
+```
+
+| nombre       | estadistico | fecha      |    valor |
+| :----------- | :---------- | :--------- | -------: |
+| Buenos Aires | 0%          | 2019-01-08 |   0.8725 |
+| Buenos Aires | 25%         | 2019-01-08 |   1.4398 |
+| Buenos Aires | 50%         | 2019-01-08 |   1.6139 |
+| Buenos Aires | 75%         | 2019-01-08 |   1.8178 |
+| Buenos Aires | 100%        | 2019-01-08 |   2.6498 |
+| Buenos Aires | Media       | 2019-01-08 |   1.6387 |
+| Buenos Aires | Desvio      | 2019-01-08 |   0.2871 |
+| Buenos Aires | MAD         | 2019-01-08 |   0.2732 |
+| Buenos Aires | 0%          | 2019-01-15 |   1.1135 |
+| Buenos Aires | 25%         | 2019-01-15 |   1.7065 |
+| Buenos Aires | 50%         | 2019-01-15 |   1.9255 |
+| Buenos Aires | 75%         | 2019-01-15 |   2.1792 |
+| Buenos Aires | 100%        | 2019-01-15 |   3.5000 |
+| Buenos Aires | Media       | 2019-01-15 |   1.9667 |
+| Buenos Aires | Desvio      | 2019-01-15 |   0.3736 |
+| Buenos Aires | MAD         | 2019-01-15 |   0.3553 |
+| Cordoba      | 0%          | 2019-01-08 | \-0.9606 |
+| Cordoba      | 25%         | 2019-01-08 |   0.1445 |
+| Cordoba      | 50%         | 2019-01-08 |   0.7749 |
+| Cordoba      | 75%         | 2019-01-08 |   1.3972 |
+| Cordoba      | 100%        | 2019-01-08 |   2.9342 |
+| Cordoba      | Media       | 2019-01-08 |   0.7868 |
+| Cordoba      | Desvio      | 2019-01-08 |   0.7589 |
+| Cordoba      | MAD         | 2019-01-08 |   0.9262 |
+| Cordoba      | 0%          | 2019-01-15 |   0.0937 |
+| Cordoba      | 25%         | 2019-01-15 |   1.0782 |
+| Cordoba      | 50%         | 2019-01-15 |   1.6112 |
+| Cordoba      | 75%         | 2019-01-15 |   2.2889 |
+| Cordoba      | 100%        | 2019-01-15 |   3.5000 |
+| Cordoba      | Media       | 2019-01-15 |   1.7121 |
+| Cordoba      | Desvio      | 2019-01-15 |   0.7915 |
+| Cordoba      | MAD         | 2019-01-15 |   0.8593 |
+| Uruguay      | 0%          | 2019-01-08 |   0.5260 |
+| Uruguay      | 25%         | 2019-01-08 |   1.4537 |
+| Uruguay      | 50%         | 2019-01-08 |   1.6513 |
+| Uruguay      | 75%         | 2019-01-08 |   1.8440 |
+| Uruguay      | 100%        | 2019-01-08 |   2.4932 |
+| Uruguay      | Media       | 2019-01-08 |   1.6395 |
+| Uruguay      | Desvio      | 2019-01-08 |   0.3016 |
+| Uruguay      | MAD         | 2019-01-08 |   0.2887 |
+| Uruguay      | 0%          | 2019-01-15 |   0.9912 |
+| Uruguay      | 25%         | 2019-01-15 |   1.6502 |
+| Uruguay      | 50%         | 2019-01-15 |   1.8414 |
+| Uruguay      | 75%         | 2019-01-15 |   2.0123 |
+| Uruguay      | 100%        | 2019-01-15 |   2.5436 |
+| Uruguay      | Media       | 2019-01-15 |   1.8371 |
+| Uruguay      | Desvio      | 2019-01-15 |   0.2796 |
+| Uruguay      | MAD         | 2019-01-15 |   0.2669 |
 
 # Referencias
 

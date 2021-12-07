@@ -11,7 +11,7 @@ output:
 #### Santiago Rovere (srovere@gmail.com)
 #### Daniel Bonhaure (danielbonhaure@gmail.com)
 #### Guillermo Podestá (gpodesta@rsmas.miami.edu)
-#### 01 de febrero de 2021
+#### 7 de diciembre de 2021
 
 
 # 1. Introducción
@@ -70,6 +70,7 @@ require(lubridate)
 require(ncdf4)
 require(raster)
 require(tidyr)
+require(sp)
 require(sf)
 ```
 
@@ -168,7 +169,7 @@ Además, a efecto de poder probar los ejemplos de esta documentación, se define
 
 ```{r, echo = FALSE}
 base.url        <- 'https://api.crc-sas.org/ws-api'
-usuario.default <- '********'
+usuario.default <- '********' 
 clave.default   <- '********'
 ```
 
@@ -613,6 +614,61 @@ ggplot2::ggplot() +
     plot.title = ggplot2::element_text(hjust = 0.5),
     plot.subtitle = ggplot2::element_text(hjust = 0.5)
   )
+```
+
+### 4.3.3. Estadísticas mensuales
+
+Este servicio devuelve —por cada llamada— el agregado mensual de un estadístico descriptivo para una de estas tres variables climáticas (precipitación y temperaturas máxima y mínima) observadas en una estación meteorológica. Los estadísticos descriptivos disponibles se muestran en la tabla siguiente; todos los estadísticos listados en la tabla se calculan y agregan para todas las variables (a excepción de *ocurrencia* que se calcula solamente para precipitación). Por lo tanto, si se desean estadísticos diferentes para una misma variable, por ejemplo totales de precipitación y desviación estándar muestral de la precipitación, se deberá ejecutar el servicio dos veces (una vez por cada estadístico deseado).
+
+Los estadísticos están calculados para ventanas de tiempo móviles de diferentes anchos (de 1 a 24 meses). Estas ventanas de tiempo se desplazan cada una péntada. Una péntada es un período de aproximadamente 5 días. Hay 6 péntadas por mes, las cuales comienzan en los días 1, 6, 11, 16, 21 y 26 de cada mes. Las primeras 5 péntadas del mes incluyen siempre 5 días, mientras que la última péntada del mes puede incluir entre 3 y 6 días dependiendo de la cantidad de días del mes. De acuerdo a esta definición, una péntada siempre comienza y termina dentro del mismo mes calendario. Por lo tanto, es posible agregar los datos por mes, para esto es necesario considerar un ancho de ventana de agregación de 6 péntadas, iniciando la agregación en la primer péntada del mes. Es justamente esto lo que hace este servicio, y además, este comportamiento no puede ser modificado.
+
+*Ruta*: /estadisticas_mensuales/{omm_id:int}/{variable_id:string}/{estadistico:string}/{ano_desde:int}/{ano_hasta:int}
+
+*Método*: GET
+
+*Parámetros*: 
+
+  * omm_id: Id OMM de la estación meteorológica;
+  * variable_id: variable cuyos datos se van a buscar;
+  * estadistico: ver campo *id* en la tabla siguiente
+  
+  id                 | estadístico
+  ------------------ | ----------------------------------------------------------------------
+  Suma               | Sumatoria de los valores
+  Media              | Media muestral
+  Mediana            | Mediana muestral
+  DesviacionEstandar | Desviación estándar muestral
+  MAD                | Mediana de desviaciones absolutas
+  NFaltantes         | Cantidad de valores faltantes en la muestra
+  NDisponibles       | Cantidad de valores no faltantes en la muestra
+  Ocurrencia         | Cantidad de días con precipitación mayor a 0.1 mm (sólo aplicable a precipitación)
+  
+  * anho_desde: Año a partir de la cual se buscan datos;
+  * anho_hasta: Año hasta la cual se buscan datos.
+  
+*Respuesta*: 
+[
+  {
+    omm_id: integer
+    anho: integer
+    mes: integer (1, 2, ..., 12)
+    variable: string { tmax, tmin, prcp }
+    estadistico: string { Suma. Media, Mediana, DesviacionEstandar, MAD, NFaltantes, NDisponibles, Ocurrencia }
+    valor: float
+  }
+]
+
+En el ejemplo que se muestra a continuación, se solicitan las medias de las tres variables descriptas arriba para la estación Pehuajó (Id OMM 87544), agrupadas en períodos móviles de 6 péntadas, iniciando siempre en la primer péntada del mes (esto es siempre así al utilizar este servicio, es decir, no se pueden modificar ni el anho de ventana de la agregación, no la péntada de inicio).  
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Búsqueda de totales mensuales de precipitación.
+url.estadisticas   <- glue::glue("{base.url}/estadisticas_mensuales/87544/prcp/Suma/2000/2001")
+estadisticas.largo <- ConsumirServicioJSON(url = url.estadisticas,
+                                           usuario = usuario.default, clave = clave.default)
+estadisticas.ancho <- tidyr::spread(estadisticas.largo, key = variable, value = valor)
+
+# Tabla de datos de totales mensuales
+knitr::kable(estadisticas.ancho)
 ```
 
 ## 4.4. Índices de sequía
@@ -1475,7 +1531,7 @@ El Índice de Estrés Evaporativo (o, en adelante, ESI por sus siglas en inglés
 
 El ESI es especialmente útil para predecir un fenómeno llamado *sequías repentinas* (o *flash droughts*). A diferencia de las sequías típicas que pueden tardar meses o años en desarrollarse, las sequías repentinas ocurren mucho más repentinamente y pueden dañar los cultivos en cuestión de semanas, mucho antes de que el estrés cause signos visibles de daño. Las *sequías repentinas* generalmente son provocadas por períodos prolongados de condiciones cálidas, secas y ventosas que agotan rápidamente la humedad del suelo. La ocurrencia de tasas reducidas de pérdida de agua por evapotranspiracion puede estimarse mediante el uso de la temperatura de la superficie de la tierra antes de que estas pérdidas se reflejen en disminuciones en la salud o *verdor* de la vegetación (por ejemplo los índices de vegetación NDVI o EVI) [22].
 
-Este servicio permite consultar valores de ESI y los percentiles asociados calculados en base al período de referencia 2002-2019. El servicio devuelve a) valores de ESI y b) percentiles de ESI para la escala temporal "ET". En ambos casos los valores devueltos están disponibles para escalas temporales de 4 y 12 semanas. Se proveen datos para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
+Este servicio permite consultar valores de ESI y los percentiles asociados calculados en base al período de referencia 2002-2019. El servicio devuelve a) valores de ESI y b) percentiles de ESI para la escala temporal "ET". En ambos casos los valores devueltos están disponibles para escalas temporales de 4 y 12 semanas. Se proveen datos para cualquier área incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
 
 El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
 
@@ -1617,7 +1673,7 @@ knitr::kable(datos.esi)
 Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y Córdoba).
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Buscar ESI con escala de agregación de 4 semanas para la primera quincena de Enero de 2019 en 3 provincias puntuales
+# Buscar ESI con escala de agregación de 4 semanas para la primera quincena de Enero de 2019 en 3 provincias Argentinas
 fecha.desde <- ConvertirFechaISO8601(as.Date("2019-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2019-01-15", tz = UTC))
 url.esi     <- glue::glue("{base.url}/esi/serie_temporal/esi/4WK/{fecha.desde}/{fecha.hasta}")
@@ -1628,6 +1684,586 @@ datos.esi   <- ConsumirServicioEspacialSerieTemporal(url = url.esi,
 
 # Mostrar datos en formato tabular
 knitr::kable(datos.esi)
+```
+
+## 4.9. Estimaciones de humedad del suelo y contenido del agua sub-superficial (GRACE).
+
+Los productos resultantes de la misión GRACE (Gravity Recovery and Climate Experiment) - que forma parte de un proyecto conjunto entre la NASA (https://www.nasa.gov/) y la Agencia Espacial Alemana (https://www.dlr.de), abordan una de las carencias más importantes de los sistemas de monitoreo de sequía: “la falta de información objetiva acerca de humedad de suelo en capas profundas y los niveles de napa subterránea”. 
+
+A partir del modelo de captación de superficie terrestre (CLSM – [24]) se han definido tres variables relevantes para el monitoreo de la sequía: humedad superficial del suelo (surface soil moisture – SFSM), humedad del suelo en la zona de raíces (root zone soil moisture – RTZSM) y almacenamiento de agua subterránea (groundwater storage – GWS). Estos tres productos están disponibles en el sitio https://nasagrace.unl.edu/ con frecuencia semanal y datos desde febrero de 2003 hasta la fecha. 
+
+Este servicio permite consultar valores de los productos GRACE gws_inst - Groundwater Percentile (Contenido de agua subterránea, expresado en percentiles), rtzsm_inst - Root Zone Soil Moisture Percentile (Humedad del suelo en zona de raíces, expresada en percentiles), sfsm_inst - Surface Soil Moisture Percentile (Humedad superficial del suelo, expresada en percentiles) para cualquier área incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
+
+El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * String de proyección: +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0;
+    * Código EPSG: 4326.
+  * Dimensiones: 
+    * longitude: coordenada X (o longitud) expresada en grados decimales;
+    * latitude: coordenada Y (o latitud) expresada en grados decimales;
+    * time: cantidad de días desde el 1 de Enero de 1970 (día 0); corresponde a la fecha de inicio de la péntada o mes asociado a la capa de datos.
+  * Variables: 
+    * gws_inst o rtzsm_inst o sfsm_inst: producto seleccionado, expresado en percentiles.
+    
+Con el propósito de facilitar la manipulación de los datos devueltos (que requiere conocimiento sobre archivos NetCDF), se recomienda enfáticamente utilizar la función *ConsumirServicioEspacial* provista al inicio del documento. Esta función permite invocar el servicio y obtener directamente un objeto de tipo *raster* [19].
+
+*Ruta*: /grace/{producto:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: 
+    ** gws_inst: Groundwater Percentile (Contenido de agua subterránea, expresado en percentiles)
+    ** rtzsm_inst: Root Zone Soil Moisture Percentile (Humedad del suelo en zona de raíces, expresada en percentiles)
+    ** sfsm_inst: Surface Soil Moisture Percentile (Humedad superficial del suelo, expresada en percentiles)
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa la zona sobre la cual se efectuará la consulta.
+  
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE para la primera quincena de Enero de 2021 (Paraguay - PY).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2021-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2021-01-15", tz = UTC))
+url.grace    <- glue::glue("{base.url}/grace/gws_inst/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/PY.geojson")
+zona.sf      <- geojsonsf::geojson_sf(zona.geojson)
+raster.grace <- ConsumirServicioEspacial(url = url.grace, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, grace)
+# y filtrar los valores para la primer fecha con datos.
+datos.grace <- raster::rasterToPoints(raster.grace) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = grace, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::filter(fecha == min(fecha)) %>%
+  dplyr::select(x, y, fecha, grace)
+
+# Graficar rasters de GRACE
+ggplot2::ggplot(data = datos.grace) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = grace)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::geom_sf(data = zona.sf, fill = NA) +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Contenido de agua subterránea (GRACE) para Paraguay",
+                subtitle = "Percentiles para el producto gws_inst") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE para la primera quincena de Enero de 2021 (Paraguay - PY).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2021-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2021-01-15", tz = UTC))
+url.grace    <- glue::glue("{base.url}/grace/rtzsm_inst/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/PY.geojson")
+zona.sf      <- geojsonsf::geojson_sf(zona.geojson)
+raster.grace <- ConsumirServicioEspacial(url = url.grace, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, grace)
+# y filtrar los valores para la primer fecha con datos.
+datos.grace <- raster::rasterToPoints(raster.grace) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = grace, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::filter(fecha == min(fecha)) %>%
+  dplyr::select(x, y, fecha, grace)
+
+# Graficar rasters de GRACE
+ggplot2::ggplot(data = datos.grace) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = grace)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::geom_sf(data = zona.sf, fill = NA) +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Humedad del suelo en zona de raíces (GRACE) para Paraguay",
+                subtitle = "Percentiles para el producto rtzsm_inst") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE para la primera quincena de Enero de 2021 (Paraguay - PY).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2021-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2021-01-15", tz = UTC))
+url.grace    <- glue::glue("{base.url}/grace/sfsm_inst/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/PY.geojson")
+zona.sf      <- geojsonsf::geojson_sf(zona.geojson)
+raster.grace <- ConsumirServicioEspacial(url = url.grace, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+
+# Convertir raster a data frame en formato largo (x, y, fecha, grace)
+# y filtrar los valores para la primer fecha con datos.
+datos.grace <- raster::rasterToPoints(raster.grace) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = grace, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::filter(fecha == min(fecha)) %>%
+  dplyr::select(x, y, fecha, grace)
+
+# Graficar rasters de GRACE
+ggplot2::ggplot(data = datos.grace) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = grace)) +
+  ggplot2::facet_wrap(~fecha, nrow = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::geom_sf(data = zona.sf, fill = NA) +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Humedad superficial del suelo (GRACE) para Paraguay",
+                subtitle = "Percentiles para el producto sfsm_inst") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /grace/serie_temporal/{producto:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  *producto: 
+    ** gws_inst: Groundwater Percentile (Contenido de agua subterránea, expresado en percentiles)
+    ** rtzsm_inst: Root Zone Soil Moisture Percentile (Humedad del suelo en zona de raíces, expresada en percentiles)
+    ** sfsm_inst: Surface Soil Moisture Percentile (Humedad superficial del suelo, expresada en percentiles)
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa la ubicación. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE desde Enero de 2011 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.grace   <- glue::glue("{base.url}/grace/serie_temporal/sfsm_inst/{fecha.desde}/{fecha.hasta}")
+datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntoCapMezaPY.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.grace, 15))
+```
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE desde Enero de 2011 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.grace   <- glue::glue("{base.url}/grace/serie_temporal/sfsm_inst/{fecha.desde}/{fecha.hasta}")
+datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntoCapMezaPY.geojson"))
+
+# Serie temporal
+datos.grace <- datos.grace %>%
+  dplyr::mutate(fecha = as.Date(fecha))
+#
+ggplot2::ggplot(data = datos.grace) +
+  ggplot2::aes(
+    x = fecha, y = valor, group = 1) +
+  ggplot2::scale_x_date(date_labels = "%m-%Y") +
+  ggplot2::geom_line(
+    linetype = "solid",
+    color = "grey70") +
+  ggplot2::geom_point(
+    color = "red") + 
+  ggplot2::labs(
+    y = "Percentiles de humedad superficial del suelo",
+    x = "Mes - Año",
+    title = "Percentiles de humedad superficial del suelo (GRACE) para Cap. Meza (Paraguay)",
+    subtitle = "Producto sfsm_inst (2011-2021)") +
+  ggplot2::theme_bw()
+```
+
+Finalmente, se presenta un ejemplo para 1 polígono correspondiente al departamento (división administrativa de nivel 1) de Itapuá en Paraguay.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.grace   <- glue::glue("{base.url}/grace/serie_temporal/sfsm_inst/{fecha.desde}/{fecha.hasta}")
+datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.grace, 15))
+```
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar GRACE desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.grace   <- glue::glue("{base.url}/grace/serie_temporal/sfsm_inst/{fecha.desde}/{fecha.hasta}")
+datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
+
+# Serie temporal
+datos.grace.filt <- datos.grace %>%
+  dplyr::mutate(fecha = as.Date(fecha)) %>%
+  dplyr::filter(estadistico %in% c("0%", "50%", "100%")) %>%
+  tidyr::pivot_wider(names_from = estadistico, values_from = valor)
+#
+ggplot2::ggplot(data = datos.grace.filt) +
+  ggplot2::aes(
+    x = fecha, group = 1) +
+  ggplot2::scale_x_date(
+    date_labels = "%m-%Y") +
+  ggplot2::geom_ribbon(
+    ggplot2::aes(ymin = `0%`, ymax = `100%`), fill = "grey70") +
+  ggplot2::geom_line(
+    ggplot2::aes(y = `50%`)) +
+  ggplot2::labs(
+    y = "Mediana y Rango de Percentiles",
+    x = "Mes - Año",
+    title = "Percentiles de humedad superficial del suelo (GRACE) para Itapúa (Paraguay)",
+    subtitle = "Producto sfsm_inst (2017-2021)") +
+  ggplot2::theme_bw()
+```
+
+## 4.10. SMAP
+
+SMAP era una misión combinada entre un radiómetro en banda L (pasivo) y un radar de microondas (SAR), el cual dejó de funcionar debido a una falla en el suministro de energía. Los sensores de microondas miden la emisión térmica de la superficie, la cual puede variar en función a las propiedades dieléctricas y la temperatura del objeto, a partir de la temperatura de brillo se puede estimar, a partir de un modelo de transferencia radiactiva, la humedad del suelo presente. Los valores de la estimación son una representación de la humedad volumétrica del suelo (cm3/cm3), es decir, la relación entre el volumen de agua y el volumen total del suelo (considerando la fase sólida, líquida y gaseosa presente en el suelo). La resolución temporal del satélite es de 3 días, obteniéndose un mapa integrado para la región Argentina/Sudamérica con dicha frecuencia, tanto para las pasadas descendentes (6 am – Hora Local), como ascendentes (6 pm – Hora Local). SMAP cuenta con una resolución espacial nativa de 36 km, que a partir del método de interpolación Backus-Gilbert, es posible obtener la humedad del suelo con una resolución de 9 km.
+
+Este servicio permite consultar valores de SMAP para las pasadas descendentes (6 am – Hora Local) para cualquier aŕea incluida dentro del CRC-SAS, la cual debe especificarse en formato GeoJSON [17]. Para limitar el volumen de datos a transferir por medio del servicio, el área de la zona especificada no debe exceder los 2.000.000 km^2^.
+
+El servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * String de proyección: +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0;
+    * Código EPSG: 4326.
+  * Dimensiones: 
+    * longitude: coordenada X (o longitud) expresada en grados decimales;
+    * latitude: coordenada Y (o latitud) expresada en grados decimales;
+    * time: cantidad de días desde el 1 de Enero de 1970 (día 0); corresponde a la fecha de inicio de la péntada o mes asociado a la capa de datos.
+  * Variables: 
+    * soil_moisture_am: valor de humedad de capa superficial del suelo.
+    
+Con el propósito de facilitar la manipulación de los datos devueltos (que requiere conocimiento sobre archivos NetCDF), se recomienda enfáticamente utilizar la función *ConsumirServicioEspacial* provista al inicio del documento. Esta función permite invocar el servicio y obtener directamente un objeto de tipo *raster* [19].
+
+*Ruta*: /smap/{producto:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { soil_moisture_am = Soil Moisture AM };
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa la zona sobre la cual se efectuará la consulta.
+  
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SMAP para Enero de 2021 (departamento de Itapúa, Paraguay).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2021-01-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2021-01-31", tz = UTC))
+url.smap     <- glue::glue("{base.url}/smap/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/ItapuaPY.geojson")
+zona.sf      <- geojsonsf::geojson_sf(zona.geojson)
+raster.smap  <- ConsumirServicioEspacial(url = url.smap, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+raster.smap  <- raster::projectRaster(raster.smap, crs = sp::CRS("+init=epsg:4326"))
+
+# Convertir raster a data frame en formato largo (x, y, fecha, soil_moisture_am).
+datos.smap.humedo <- raster::rasterToPoints(raster.smap) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = smap, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::filter(fecha == as.Date("2021-01-16")) %>%
+  dplyr::select(x, y, fecha, smap)
+
+# Buscar SMAP para Agosto de 2019 (departamento de Itapúa, Paraguay).
+fecha.desde  <- ConvertirFechaISO8601(as.Date("2019-08-01", tz = UTC))
+fecha.hasta  <- ConvertirFechaISO8601(as.Date("2019-08-31", tz = UTC))
+url.smap     <- glue::glue("{base.url}/smap/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+zona.geojson <- paste0(getwd(), "/data/ItapuaPY.geojson")
+zona.sf      <- geojsonsf::geojson_sf(zona.geojson)
+raster.smap  <- ConsumirServicioEspacial(url = url.smap, usuario = usuario.default, 
+                                         clave = clave.default,
+                                         archivo.geojson.zona = zona.geojson)
+raster.smap  <- raster::projectRaster(raster.smap, crs = sp::CRS("+init=epsg:4326"))
+
+# Convertir raster a data frame en formato largo (x, y, fecha, soil_moisture_am).
+datos.smap.seco <- raster::rasterToPoints(raster.smap) %>%
+  dplyr::as_tibble() %>%
+  dplyr::rename(x = 1) %>%
+  tidyr::gather(key = fecha_string, value = smap, -x, -y) %>%
+  dplyr::mutate(fecha = as.Date(fecha_string, format = "X%Y.%m.%d")) %>%
+  dplyr::filter(fecha == as.Date("2019-08-29")) %>%
+  dplyr::select(x, y, fecha, smap)
+
+# Unir ambos periodos en único dataframe
+datos.smap <- dplyr::bind_rows(
+  datos.smap.humedo, datos.smap.seco)
+
+# Graficar rasters de GRACE
+ggplot2::ggplot(data = datos.smap) +
+  ggplot2::geom_raster(mapping = ggplot2::aes(x = x, y = y, fill = smap)) +
+  ggplot2::facet_wrap(~ifelse(lubridate::month(fecha) == 8, 
+                              'Ejemplo día posterior a Periodo Seco', 
+                              'Ejemplo día posterior a Periodo Húmedo'), ncol = 2) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = 1, begin = 0, end = 1,
+                                direction = 1, option = "D", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 20 , label.position = "bottom")) +
+  ggplot2::geom_sf(data = zona.sf, fill = NA) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Humedad superficial del suelo (SMAP) para Itapúa (Paraguay)",
+                subtitle = "Valores para el producto soil_moisture_am") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5),
+    axis.text.x = ggplot2::element_blank(),
+    axis.ticks.x = ggplot2::element_blank(),
+    axis.text.y = ggplot2::element_blank(),
+    axis.ticks.y = ggplot2::element_blank()
+  )
+```
+
+
+
+Además de poder descargar este producto en formato *raster*, también es posible extraer series temporales de valores para un conjunto de puntos (uno o más) o polígonos (uno o más). En el caso de la extracción para un conjunto de puntos, la respuesta devuelta por el servicio es una serie temporal de valores para cada punto dentro del rango de fechas especificado. En el caso de que la extracción sea realizada para un conjunto de polígonos, la respuesta devuelta por el servicio es una serie temporal de *estadísticos* (media, mediana, desvío estándar, desviación mediana absoluta, mínimo, máximo y los percentiles correspondientes al 25% y 75%) para cada polígono dentro del rango de fechas especificado.
+
+Los puntos o polígonos deben especificarse en formato GeoJSON [17]. Además, cada punto o polígono debe tener asociado al menos un atributo para que el servicio pueda devolver una respuesta en la cual se puedan identificar cada una de las geometrías (puntos o polígonos). Por ejemplo, en caso de que los polígonos correspondan a localidades, el archivo GeoJSON podría contener atributos indicando el código de localidad o su nombre. Para el caso de los puntos, se podría indicar un nombre asociado a cada una de las ubicaciones, un código o los atributos que el usuario desee agregar.
+
+*Ruta*: /smap/serie_temporal/{producto:string}/{fecha_desde:date}/{fecha_hasta:date}
+
+*Método*: POST
+
+*Parámetros*: 
+
+  * producto: { soil_moisture_am = Soil Moisture AM };
+  * fecha_desde: fecha de inicio del período a consultar (en formato ISO-8601 [20]); 
+  * fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601 [20]).
+  
+*Parámetros del cuerpo del request*:
+  
+  * zona.geojson: string de formato GeoJSON que representa los puntos o polígonos sobre los cuales se efectuará la consulta.
+  
+*Respuesta*:
+  
+El servicio devuelve una respuesta en formato JSON, la cual puede convertirse a un formato tabular. La respuesta contiene los datos provistos por el usuario para cada una de las geometrías y los siguientes campos, según el usuario haya especificado puntos o polígonos:
+
+[
+  {
+    ...
+    <atributos provistos por el usuario para cada punto o polígono>
+    ...,
+    estadístico: string (solamente para el caso de polígonos, ver detalle a continuación),
+    fecha: date (fecha dentro del rango de fechas especificadas por el usuario),
+    valor: float (valor asociado al punto o polígono para la fecha especificada - y al estadístico en el caso de polígonos)
+  }
+]
+
+Los estadísticos devueltos para el caso de las consultas asociadas a los polígonos se codifican de la siguiente manera:
+
+  * 0%: mínimo valor dentro del polígono
+  * 25%: percentil 25 de los valores dentro del polígono
+  * 50%: mediana de los valores dentro del polígono
+  * 75%: percentil 75 de los valores dentro del polígono
+  * 100%: máximo valor dentro del polígono
+  * Media: media de los valores dentro del polígono
+  * Desvio: desvío estándar de los valores dentro del polígono
+  * MAD: desvío mediano absoluto de los valores dentro del polígono
+  
+A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa la ubicación. Se presenta primero el ejemplo para ubicaciones puntuales.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntoCapMezaPY.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.smap, 15))
+```
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/PuntoCapMezaPY.geojson"))
+
+# Serie temporal 
+datos.smap <- datos.smap %>%
+  dplyr::mutate(valor = ifelse(valor > 1, NA, valor)) %>%
+  dplyr::mutate(fecha = as.Date(fecha))
+#
+ggplot2::ggplot(data = datos.smap) +
+  ggplot2::aes(
+    x = fecha, y = valor, group = 1) +
+  ggplot2::scale_x_date(date_labels = "%m-%Y") +
+  ggplot2::geom_line(
+    linetype = "solid",
+    color = "grey70") +
+  ggplot2::geom_point(
+    color = "red") + 
+  ggplot2::labs(
+    y = "Valores de humedad superficial del suelo",
+    x = "Mes - Año",
+    title = "Humedad superficial del suelo (SMAP) para Cap. Meza (Paraguay)",
+    subtitle = "Producto soil_moisture_am (2016-2021)") +
+  ggplot2::theme_bw()
+```
+
+Finalmente, se presenta un ejemplo para 1 polígono correspondiente al departamento (división administrativa de nivel 1) de Itapuá en Paraguay.
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SMAP desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.smap, 15))
+```
+
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Buscar SMAP desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+fecha.desde <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
+url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+                                                     usuario = usuario.default, 
+                                                     clave = clave.default,
+                                                     archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
+
+# Serie temporal
+datos.smap.filt <- datos.smap %>%
+  dplyr::mutate(fecha = as.Date(fecha)) %>%
+  dplyr::filter(estadistico %in% c("0%", "50%", "100%")) %>%
+  tidyr::pivot_wider(names_from = estadistico, values_from = valor)
+#
+ggplot2::ggplot(data = datos.smap.filt) +
+  ggplot2::aes(
+    x = fecha, group = 1) +
+  ggplot2::scale_x_date(
+    date_labels = "%m-%Y") +
+  ggplot2::geom_ribbon(
+    ggplot2::aes(ymin = `0%`, ymax = `100%`), fill = "grey70") +
+  ggplot2::geom_line(
+    ggplot2::aes(y = `50%`)) +
+  ggplot2::labs(
+    y = "Mediana y Rango de Valores",
+    x = "Mes - Año",
+    title = "Humedad superficial del suelo (SMAP) para Itapúa (Paraguay)",
+    subtitle = "Producto soil_moisture_am (2017-2021)") +
+  ggplot2::theme_bw()
 ```
 
 # Referencias
@@ -1678,3 +2314,5 @@ knitr::kable(datos.esi)
 [22]  https://chc.ucsb.edu/data/chirps-gefs
 
 [23]  https://sissa.crc-sas.org/monitoreo/indice-de-estres-evaporativo
+
+[24] Koster, R. D., Suarez, M. J., Ducharne, A., Stieglitz, M., and Kumar, P. (2000), A catchment-based approach to modeling land surface processes in a general circulation model: 1. Model structure. J. Geophys. Res., 105(D20), 24809– 24822, https://doi.org/10.1029/2000JD900327.

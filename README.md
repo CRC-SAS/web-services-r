@@ -8,7 +8,7 @@
 
 #### Guillermo Podestá (<gpodesta@rsmas.miami.edu>)
 
-#### 7 de diciembre de 2021
+#### 30 de mayo de 2022
 
 # 1. Introducción
 
@@ -141,7 +141,11 @@ tener que detenerse en detalles como la autenticación o la conversión de
 datos devueltos.
 
 ``` r
-# Esto permite ignorar posibles errores en la conexión SSL
+# Definición de funciones globales, en lenguaje R.
+
+# El parámetro ssl_verifypeer=FALSE implica que no se va a verificar la validez del certificado 
+# utilizado en la conexión SSL establecida con la API del CRC-SAS. Esto es útil cuando la máquina 
+# cliente no puede validar el certificado emitido por la CA del CRC-SAS.
 httr::set_config( httr::config(ssl_verifypeer = FALSE) )
 
 # Función para acceder a un servicio web definido por una URL utilizando el método GET.
@@ -3441,13 +3445,14 @@ knitr::kable(head(datos.smap, 15))
 fecha.desde <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
-datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
                                                      usuario = usuario.default, 
                                                      clave = clave.default,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
 
 # Serie temporal
 datos.smap.filt <- datos.smap %>%
+  dplyr::mutate(valor = ifelse(valor > 1, NA, valor)) %>%
   dplyr::mutate(fecha = as.Date(fecha)) %>%
   dplyr::filter(estadistico %in% c("0%", "50%", "100%")) %>%
   tidyr::pivot_wider(names_from = estadistico, values_from = valor)

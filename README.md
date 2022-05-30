@@ -141,6 +141,9 @@ tener que detenerse en detalles como la autenticación o la conversión de
 datos devueltos.
 
 ``` r
+# Esto permite ignorar posibles errores en la conexión SSL
+httr::set_config( httr::config(ssl_verifypeer = FALSE) )
+
 # Función para acceder a un servicio web definido por una URL utilizando el método GET.
 # Devuelve la respuesta como texto plano.
 ConsumirServicioGET <- function(url, usuario, clave) {
@@ -154,7 +157,8 @@ ConsumirServicioGET <- function(url, usuario, clave) {
 # Devuelve la respuesta como raw.
 ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
   req  <- httr::POST(url = url, body = body, encode = "json", 
-                     config = httr::authenticate(user = usuario, password = clave))
+                     config = httr::authenticate(user = usuario, 
+                                                 password = clave))
   return (httr::content(req, as = return.type))
 }
 
@@ -1149,7 +1153,7 @@ knitr::kable(spi.3.ultimo, digits = 2)
 
 | indice_configuracion_id | omm_id | pentada_fin |  ano | metodo_imputacion_id | valor_dato | valor_indice | percentil_dato |
 |------------------------:|-------:|------------:|-----:|---------------------:|-----------:|-------------:|---------------:|
-|                      43 |  87544 |          67 | 2021 |                    0 |      323.7 |         0.48 |          68.33 |
+|                      43 |  87544 |          29 | 2022 |                    0 |      254.6 |        -0.18 |          42.89 |
 
 ### 4.4.3. Parámetros y otros valores resultantes del ajuste de distribuciones
 

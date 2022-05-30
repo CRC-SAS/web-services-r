@@ -84,6 +84,9 @@ options(bitmapType = "cairo")
 A continuación, definiremos un set de funciones R útiles que le permitirán al usuario acceder a la API de una forma muy sencilla, sin tener que detenerse en detalles como la autenticación o la conversión de datos devueltos.
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE }
+# Esto permite ignorar posibles errores en la conexión SSL
+httr::set_config( httr::config(ssl_verifypeer = FALSE) )
+
 # Función para acceder a un servicio web definido por una URL utilizando el método GET.
 # Devuelve la respuesta como texto plano.
 ConsumirServicioGET <- function(url, usuario, clave) {
@@ -97,7 +100,8 @@ ConsumirServicioGET <- function(url, usuario, clave) {
 # Devuelve la respuesta como raw.
 ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
   req  <- httr::POST(url = url, body = body, encode = "json", 
-                     config = httr::authenticate(user = usuario, password = clave))
+                     config = httr::authenticate(user = usuario, 
+                                                 password = clave))
   return (httr::content(req, as = return.type))
 }
 

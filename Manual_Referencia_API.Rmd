@@ -428,7 +428,8 @@ fecha.hasta           <- ConvertirFechaISO8601(as.Date("2019-01-31", tz = UTC))
 url.registros.diarios <- glue::glue("{base.url}/registros_diarios/87544/{fecha.desde}/{fecha.hasta}")
 registros.largo       <- ConsumirServicioJSON(url = url.registros.diarios,
                                               usuario = usuario.default, clave = clave.default)
-registros.ancho       <- tidyr::spread(registros.largo, key = variable_id, value = valor)
+registros.ancho       <- dplyr::select(registros.largo, -estado) %>%
+                         tidyr::spread(key = variable_id, value = valor)
 
 # Tabla de datos de todas las variables
 knitr::kable(registros.ancho[1:6,])

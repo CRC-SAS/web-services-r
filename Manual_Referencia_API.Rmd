@@ -8,10 +8,9 @@ output:
 
 ## Documentación y ejemplos en languaje R de acceso programático (API)
 
-#### Santiago Rovere (srovere@gmail.com)
 #### Daniel Bonhaure (danielbonhaure@gmail.com)
 #### Guillermo Podestá (gpodesta@rsmas.miami.edu)
-#### 30 de mayo de 2022
+#### 29 de diciembre de 2025
 
 
 # 1. Introducción
@@ -69,9 +68,13 @@ require(knitr)
 require(lubridate)
 require(ncdf4)
 require(raster)
+require(terra)
+require(tidync)
 require(tidyr)
-require(sp)
+require(tidyterra)
 require(sf)
+require(sp)
+require(stringi)
 ```
 
 Luego, indicaremos que se utilice la librería Cairo para generar los gráficos que se muestran en los ejemplos.
@@ -154,6 +157,25 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
   return (un.raster)
 }
 
+# Función para descargar un archivo NetCDF desde un servicio web definido por 
+#   una URL, utilizando un usuario y clave.
+# La respuesta es TRUE si la descarga fue exitosa y FALSE en caso contrario.
+DescargarNetCDF <- function(filepath, url, usuario, clave) {
+  # a. Realizar consulta al backenc
+  resp  <- httr::GET(
+    url = url, config = httr::authenticate(user = usuario, password = clave))
+  # b. Guardar NetCDF en un archivo temporal
+  if (httr::http_type(resp) == "application/x-netcdf4") {
+    binary_data <- content(resp, as = "raw")
+    base::writeBin(binary_data, filepath)
+  } else {
+    message("The response does not appear to be binary data.")
+    return (FALSE)  # Se retorna FALSE, lo que indica que la descarga falló
+  }
+  # c. Si se pudo descargar el NetCDF se retorna TRUE
+  return (TRUE)
+}
+
 # Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
 # Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
 # La respuesta se devuelve con un Data Frame.
@@ -205,7 +227,7 @@ El método de consulta (GET o POST) indica la forma en que los parámetros son e
 
 ## 4.1. Datos *sobre* estaciones meteorológicas
 
-A la fecha de escritura de este documento, la base de datos del CRC-SAS contiene observaciones para 356 estaciones meteorológicas convencionales distribuidas en seis países: Argentina, Bolivia, Brasil, Chile, Paraguay y Uruguay. A su vez, cada estación pertenece a una institución (o red) del país correspondiente. Al momento, el único país que provee estaciones de dos instituciones distintas es Argentina (SMN e INTA). Todos los demás países proveen estaciones de una única institución.
+A la fecha de escritura de este documento, la base de datos del CRC-SAS contiene observaciones para 384 estaciones meteorológicas convencionales distribuidas en seis países: Argentina, Bolivia, Brasil, Chile, Paraguay y Uruguay. A su vez, cada estación pertenece a una institución (o red) del país correspondiente. Al momento, el único país que provee estaciones de dos instituciones distintas es Argentina (SMN e INTA). Todos los demás países proveen estaciones de una única institución.
 
 Para cada estación, se puede consultar información relativa a la misma (metadatos). Por ejemplo: código internacional de OMM, nombre, ubicación en latitud/longitud decimales, elevación respecto al nivel del mar, etc. Con el propósito de poder acotar el conjunto de estaciones cuyos datos se desea obtener, existen cuatro maneras de seleccionar las mismas:
 
@@ -1937,7 +1959,7 @@ datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/PuntoCapMezaPY.geojson"))
 
 # Mostrar datos en formato tabular
-knitr::kable(head(datos.grace, 15))
+knitr::kable(head(datos.grace, 16))
 ```
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
@@ -2181,7 +2203,7 @@ A continuación se presentan dos ejemplos: una consulta para puntos y otra para 
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
 # Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -2195,7 +2217,7 @@ knitr::kable(head(datos.smap, 15))
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
 # Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -2229,10 +2251,10 @@ Finalmente, se presenta un ejemplo para 1 polígono correspondiente al departame
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
 # Buscar SMAP desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
-datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
                                                      usuario = usuario.default, 
                                                      clave = clave.default,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
@@ -2244,7 +2266,7 @@ knitr::kable(head(datos.smap, 15))
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
 # Buscar SMAP desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -2275,6 +2297,227 @@ ggplot2::ggplot(data = datos.smap.filt) +
     subtitle = "Producto soil_moisture_am (2017-2021)") +
   ggplot2::theme_bw()
 ```
+
+## 4.11. Pronósticos Sub-Estacionales
+
+Las perspectivas subestacionales elaboradas en el marco de una consultoría financiada por el proyecto ENANDES+, liderada por el Mg. Félix Carrasco en colaboración con el grupo DiVAr (Dinámica de la Variabilidad atmosférica sobre Sudamérica, Centro de Investigaciones del Mar y la Atmósfera), se basan en la calibración de los modelos que integran la base de datos [IRI/SubC](https://iridl.ldeo.columbia.edu/SOURCES/.Models/.SubX/). Se incluyen los pronósticos de los modelos RSMAS-CCSM4, GMAO-GEOS_V2p1, NCEP-CFSv2, ECCC-GEPS8 y EMC-GEFSv12_CPC, que se calibran de manera individual utilizando la técnica de “correlación probabilística de anomalías” [25]. Dicha técnica se implementa a partir de una matriz de correlación calculada con los pronósticos emitidos entre julio de 2023 y julio de 2024. Asimismo, con el fin de disponer operativamente de los pronósticos calibrados los días miércoles, las fechas de emisión de los distintos modelos se alinean previamente. Como conjunto de referencia se utilizan los datos del reanálisis ERA5 [26] en el período 1998-2016, tanto para temperatura como para precipitación, disponibles a través de [Copernicus](https://climate.copernicus.eu/).
+
+
+### 4.11.1. Consultar las fechas disponibles
+
+Este servicio devuelve como respuesta un JSON con las fechas disponibles. Es decir, 
+todas aquellas fechas para las cuales existen pronósticos subestacionales calibrados. 
+El JSON devuelvo por este servicio es un listado de fechas en formato string.
+
+*Ruta*: /pronos/sseas/fechas
+
+*Método*: GET
+  
+*Respuesta*: [
+  string,
+  string,
+  ...
+]
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Definir URL de la consulta a ser realizada a la API
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/fechas")
+
+# Descargar datos
+datos.descargados <- ConsumirServicioJSON(url = url.prono.sseas,
+                                          usuario = usuario.default,
+                                          clave = clave.default)
+
+# Ordenar fechas en orden decreciente
+datos.descargados <- stringi::stri_sort(datos.descargados, decreasing = TRUE)
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.descargados, 10), col.names = "fechas")
+```
+
+
+### 4.11.2. Descargar archivo NetCDF (incluye todas las semanas objetivo)
+
+Este servicio devuelve como respuesta un stream de datos binarios correspondiente a un archivo de formato NetCDF [18]. Dicho archivo NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * Código EPSG: 4326.
+  * Dimensiones: 
+    * lon: coordenada X (o longitud) expresada en grados decimales;
+    * lat: coordenada Y (o latitud) expresada en grados decimales;
+  * Variables: 
+    * prob_corr: la probabilidad de exceder el percentil consultado.
+    
+Con el propósito de facilitar la manipulación de los datos devueltos (que requiere conocimiento sobre archivos NetCDF), se recomienda utilizar la función *DescargarNetCDF* provista al inicio del documento. Esta función permite invocar el servicio y descargar el archivo NetCDF.
+
+*Ruta*: /pronos/sseas/{modelo:string}/{variable:string}/{percentil:int}/{fecha_calibracion:date}
+
+*Método*: GET
+
+*Parámetros*: 
+
+  * modelo: el modelo calibrado (RSMAS-CCSM4, GMAO-GEOS_V2p1, NCEP-CFSv2, ECCC-GEPS8 y EMC-GEFSv12_CP);
+  * variable: la variable calibrada (pr, tas), donde pr es la precipitación y tas la temperatura; 
+  * percentil: el percentil objetivo (20, 80);
+  * fecha_calibracion: la fecha de calibración (en formato ISO-8601 [20]).
+  
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Descargar el NetCDF completo para una fecha dada. Este NetCDF incluye los
+#   pronósticos para 1, 2 y 3y4 semanas!
+
+# Definir parámetros de la consulta a ser realizada a la API
+modelo <- "CFSv2"
+variable <- "pr"
+percentil <- 20
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}")
+
+# Definir el path donde guardar el archivo desacargado
+archivo.netcdf    <- "/tmp/PronoSEASS.nc"
+
+# Descargar NetCDF
+resultado <- DescargarNetCDF(filepath = archivo.netcdf,
+                             url = url.prono.sseas, 
+                             usuario = usuario.default, 
+                             clave = clave.default)
+
+if (resultado) {
+  
+  # Leer NetCDF y extrar pronóstico para la semana 1
+  filtered_data <- tidync::tidync(archivo.netcdf) %>%
+    tidync::activate("D0,D1,D2") %>%
+    tidync::hyper_filter(
+      semanas = (semanas == 1)) %>%
+    tidync::hyper_tibble() %>%
+    dplyr::select(lon="X", lat="Y", val="prob_corr")
+  
+  # Convertir los datos extraídos a un objeto de tipo raster
+  spat_raster <- terra::rast(x=filtered_data, type="xyz")
+  terra::crs(spat_raster) <- "EPSG:4326"
+  
+  # Leer GeoJSON con el contorno del CRC-SAS
+  crcsas.geojson <- paste0(getwd(), "/data/CRC-SAS.geojson")
+  crcsas.sf      <- geojsonsf::geojson_sf(crcsas.geojson)
+  
+  # Graficar raster 
+  ggplot2::ggplot() +
+    tidyterra::geom_spatraster(data = spat_raster) +
+    ggplot2::coord_sf() +
+    ggplot2::scale_fill_viridis_c(alpha = .5, begin = 0, end = 1,
+                                  direction = -1, option = "cividis", values = NULL, space = "Lab",
+                                  na.value = "white", guide = "colourbar", aesthetics = "fill") +
+    ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
+    ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
+    ggplot2::labs(x = "", y = "", fill = "",
+                  title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                  subtitle = "Semana 1") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      legend.position = 'right',
+      plot.title = ggplot2::element_text(hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(hjust = 0.5)
+    )
+  
+}
+
+```
+
+Adicionalmente, también es posible desacargar el archivo utilizando CURL.
+
+```{bash, echo = TRUE, eval = FALSE}
+curl --header "Content-Type: application/x-netcdf4" --request GET "<url>" --output PronoSEASS.nc --insecure
+```
+
+
+### 4.11.3. Descargar datos en formato JSON (incluye una sola semana objetivo)
+
+
+Este servicio devuelve como respuesta un JSON con los valores pronosticados, pero para una sola semana objetivo. Dicho JSON contiene la siguiente información:
+
+  * Sistema de coordenadas: 
+    * Latitud/Longitud: sistema de coordenadas expresadas en grados decimales;
+    * Código EPSG: 4326.
+
+  * Variables: 
+    * lon: coordenada X (o longitud) expresada en grados decimales;
+    * lat: coordenada Y (o latitud) expresada en grados decimales;
+    * val: la probabilidad de exceder el percentil consultado.
+
+*Ruta*: /pronos/sseas/{modelo:string}/{variable:string}/{percentil:int}/{fecha_calibracion:date}/{semana_objetivo:int}
+
+*Método*: GET
+
+*Parámetros*: 
+
+  * modelo: el modelo calibrado (RSMAS-CCSM4, GMAO-GEOS_V2p1, NCEP-CFSv2, ECCC-GEPS8 y EMC-GEFSv12_CP);
+  * variable: la variable calibrada (pr, tas), donde pr es la precipitación y tas la temperatura; 
+  * percentil: el percentil objetivo (20, 80);
+  * fecha_calibracion: la fecha de calibración (en formato ISO-8601 [20]);
+  * semana_objetivo: la semana objetivo (1, 2, 3). OBS: la semana 3 incluye la 4.
+  
+*Respuesta*: [
+  {
+    lon: float,
+    lat: float,
+    val: float
+  }
+]
+
+*Ejemplo*:
+
+```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+# Descargar pronóstico calibrado para una semana en particular.
+
+# Definir parámetros de la consulta a ser realizada a la API
+modelo <- "CFSv2"
+variable <- "pr"
+percentil <- 20
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+semana.objetivo <- 1
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}/{semana.objetivo}")
+
+# Descargar datos
+datos.descargados <- ConsumirServicioJSON(url = url.prono.sseas,
+                                          usuario = usuario.default,
+                                          clave = clave.default)
+
+# Convertir los datos extraídos a un objeto de tipo raster
+spat.raster <- terra::rast(x=datos.descargados, type="xyz")
+terra::crs(spat_raster) <- "EPSG:4326"
+
+# Leer GeoJSON con el contorno del CRC-SAS
+crcsas.geojson <- paste0(getwd(), "/data/CRC-SAS.geojson")
+crcsas.sf      <- geojsonsf::geojson_sf(crcsas.geojson)
+
+# Graficar raster 
+ggplot2::ggplot() +
+  tidyterra::geom_spatraster(data = spat.raster) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = .5, begin = 0, end = 1,
+                                direction = -1, option = "cividis", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
+  ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                subtitle = "Semana 1") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'right',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5)
+  )
+
+
+```
+
 
 # Referencias
 
@@ -2326,3 +2569,9 @@ ggplot2::ggplot(data = datos.smap.filt) +
 [23]  https://sissa.crc-sas.org/monitoreo/indice-de-estres-evaporativo
 
 [24] Koster, R. D., Suarez, M. J., Ducharne, A., Stieglitz, M., and Kumar, P. (2000), A catchment-based approach to modeling land surface processes in a general circulation model: 1. Model structure. J. Geophys. Res., 105(D20), 24809– 24822, https://doi.org/10.1029/2000JD900327.
+
+[25] van den Dool, H., E. Becker, L.-C. Chen, and Q. Zhang, 2017: The probability anomaly correlation and calibration of probabilistic forecasts. Weather and Forecasting, 32, 199-206. https://doi.org/10.1175/WAF-D-16-0115.1.
+
+[26] Hersbach, H., and coauthors, 2020: The ERA5 global reanalysis. Quarterly Journal of the Royal Meteorological Society, 146, 1999-2049. https://doi.org/10.1002/qj.3803.
+
+

@@ -2,25 +2,22 @@
 
 ## Documentación y ejemplos en languaje R de acceso programático (API)
 
-#### Santiago Rovere (<srovere@gmail.com>)
-
 #### Daniel Bonhaure (<danielbonhaure@gmail.com>)
 
 #### Guillermo Podestá (<gpodesta@rsmas.miami.edu>)
 
-#### 30 de mayo de 2022
+#### 29 de diciembre de 2025
 
 # 1. Introducción
 
 El presente documento tiene como propósitos:
 
--   describir los diferentes conjuntos de datos que el CRC-SAS provee a
-    sus miembros y colaboradores mediante la interfaz descripta más
-    abajo;
--   explicar el mecanismo de acceso a los datos, detallando los formatos
-    de entrada y salida de la información; y
--   proveer ejemplos de implementación que faciliten al usuario el
-    acceso a los datos.
+- describir los diferentes conjuntos de datos que el CRC-SAS provee a
+  sus miembros y colaboradores mediante la interfaz descripta más abajo;
+- explicar el mecanismo de acceso a los datos, detallando los formatos
+  de entrada y salida de la información; y
+- proveer ejemplos de implementación que faciliten al usuario el acceso
+  a los datos.
 
 El público al cual está destinado este documento está conformado por
 desarrolladores de software, programadores científicos o investigadores
@@ -45,18 +42,18 @@ posibles modificaciones sustanciales en su funcionamiento.
 La API descrita en este documento provee acceso a información organizada
 en los siguientes conjuntos de datos:
 
--   datos *sobre* estaciones meteorológicas (o metadatos);
--   registros de observaciones in situ de distintas variables
-    meteorológicas a nivel diario;
--   estadísticas y climatologías;
--   índices de sequía;
--   eventos secos y húmedos identificados mediante índices de sequía;
--   índices de vegetación (NDVI y EVI) derivados a partir de datos
-    satelitales;
--   precipitaciones estimadas combinando datos de satélite e in situ
-    (CHIRPS);
--   pronósticos de precipitación y sequía a 15 días (CHIRPS-GEFS);
--   índice de stress evaporativo (ESI) y percentiles derivados.
+- datos *sobre* estaciones meteorológicas (o metadatos);
+- registros de observaciones in situ de distintas variables
+  meteorológicas a nivel diario;
+- estadísticas y climatologías;
+- índices de sequía;
+- eventos secos y húmedos identificados mediante índices de sequía;
+- índices de vegetación (NDVI y EVI) derivados a partir de datos
+  satelitales;
+- precipitaciones estimadas combinando datos de satélite e in situ
+  (CHIRPS);
+- pronósticos de precipitación y sequía a 15 días (CHIRPS-GEFS);
+- índice de stress evaporativo (ESI) y percentiles derivados.
 
 Cada uno de los conjuntos de datos accesibles se describirá en más
 detalle en la sección *Servicios*.
@@ -122,9 +119,13 @@ require(knitr)
 require(lubridate)
 require(ncdf4)
 require(raster)
+require(terra)
+require(tidync)
 require(tidyr)
-require(sp)
+require(tidyterra)
 require(sf)
+require(sp)
+require(stringi)
 ```
 
 Luego, indicaremos que se utilice la librería Cairo para generar los
@@ -211,6 +212,25 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
   return (un.raster)
 }
 
+# Función para descargar un archivo NetCDF desde un servicio web definido por 
+#   una URL, utilizando un usuario y clave.
+# La respuesta es TRUE si la descarga fue exitosa y FALSE en caso contrario.
+DescargarNetCDF <- function(filepath, url, usuario, clave) {
+  # a. Realizar consulta al backenc
+  resp  <- httr::GET(
+    url = url, config = httr::authenticate(user = usuario, password = clave))
+  # b. Guardar NetCDF en un archivo temporal
+  if (httr::http_type(resp) == "application/x-netcdf4") {
+    binary_data <- content(resp, as = "raw")
+    base::writeBin(binary_data, filepath)
+  } else {
+    message("The response does not appear to be binary data.")
+    return (FALSE)  # Se retorna FALSE, lo que indica que la descarga falló
+  }
+  # c. Si se pudo descargar el NetCDF se retorna TRUE
+  return (TRUE)
+}
+
 # Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
 # Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
 # La respuesta se devuelve con un Data Frame.
@@ -261,16 +281,16 @@ A continuación, se describirá en detalle cada conjunto de datos y los
 servicios provistos para acceder a los mismos. Para cada servicio se
 proveerá la siguiente información:
 
--   ruta (anteriormente descripta);
--   método (indica el tipo de request que se debe realizar - GET o POST)
--   parámetros (dado que la ruta puede contener algunos filtros
-    necesarios para poder obtener la información solicitada, por
-    ejemplo, el país para el cual se buscan datos de estaciones);
--   respuesta (formato o estructura con que se devuelven los datos,
-    generalmente en formato JSON el cual puede transformar a Data Frame
-    con las funciones provistas al inicio del documento); y
--   ejemplo de uso implementado en lenguaje R utilizando las funciones y
-    variables definidas previamente.
+- ruta (anteriormente descripta);
+- método (indica el tipo de request que se debe realizar - GET o POST)
+- parámetros (dado que la ruta puede contener algunos filtros necesarios
+  para poder obtener la información solicitada, por ejemplo, el país
+  para el cual se buscan datos de estaciones);
+- respuesta (formato o estructura con que se devuelven los datos,
+  generalmente en formato JSON el cual puede transformar a Data Frame
+  con las funciones provistas al inicio del documento); y
+- ejemplo de uso implementado en lenguaje R utilizando las funciones y
+  variables definidas previamente.
 
 Las rutas para acceder a los servicios web pueden contener parámetros
 que deba proveer el usuario. Por ejemplo, como se verá más adelante, si
@@ -299,7 +319,7 @@ forma transparente para el usuario.
 ## 4.1. Datos *sobre* estaciones meteorológicas
 
 A la fecha de escritura de este documento, la base de datos del CRC-SAS
-contiene observaciones para 356 estaciones meteorológicas convencionales
+contiene observaciones para 384 estaciones meteorológicas convencionales
 distribuidas en seis países: Argentina, Bolivia, Brasil, Chile, Paraguay
 y Uruguay. A su vez, cada estación pertenece a una institución (o red)
 del país correspondiente. Al momento, el único país que provee
@@ -312,10 +332,10 @@ en latitud/longitud decimales, elevación respecto al nivel del mar, etc.
 Con el propósito de poder acotar el conjunto de estaciones cuyos datos
 se desea obtener, existen cuatro maneras de seleccionar las mismas:
 
--   todas las estaciones;
--   estaciones de un país;
--   estaciones de un país y de una institución o red; y
--   estaciones geográficamente vecinas.
+- todas las estaciones;
+- estaciones de un país;
+- estaciones de un país y de una institución o red; y
+- estaciones geográficamente vecinas.
 
 ### 4.1.1. Estaciones de todos los países
 
@@ -357,8 +377,8 @@ knitr::kable(estaciones[1:6,])
 
 *Parámetros*:
 
--   iso_pais: \[ AR, BO, BR, CL, PY, UY \] (código ISO2 del país para el
-    cual se busca estaciones)
+- iso_pais: \[ AR, BO, BR, CL, PY, UY \] (código ISO2 del país para el
+  cual se busca estaciones)
 
 *Respuesta*: \[ { omm_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel_adm1: string, nivel_adm2:
@@ -392,8 +412,8 @@ knitr::kable(estaciones.argentina[1:6,])
 
 *Parámetros*:
 
--   iso_pais: ver columna *país* de la tabla siguiente
--   institucion: ver columna *institución* de la tabla siguiente
+- iso_pais: ver columna *país* de la tabla siguiente
+- institucion: ver columna *institución* de la tabla siguiente
 
 | institución | país | nombre                                         |
 |-------------|------|------------------------------------------------|
@@ -444,16 +464,16 @@ estaciones vecinas a devolver.
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica central;
--   max_distancia (opcional): máximo radio de búsqueda (en km) de
-    estaciones vecinas a la central;
--   max_diferencia_elevacion (opcional): máxima diferencia de elevación
-    (en m) para que una estación sea considerada vecina de la estación
-    central; y
--   max_vecinas (opcional): máxima cantidad de estaciones vecinas a
-    retornar (las estaciones vecinas se ordenan primero por distancia y
-    luego por diferencia de elevación respecto a la estación central,
-    ambas en forma ascendente).
+- omm_id: Id OMM de la estación meteorológica central;
+- max_distancia (opcional): máximo radio de búsqueda (en km) de
+  estaciones vecinas a la central;
+- max_diferencia_elevacion (opcional): máxima diferencia de elevación
+  (en m) para que una estación sea considerada vecina de la estación
+  central; y
+- max_vecinas (opcional): máxima cantidad de estaciones vecinas a
+  retornar (las estaciones vecinas se ordenan primero por distancia y
+  luego por diferencia de elevación respecto a la estación central,
+  ambas en forma ascendente).
 
 *Respuesta*: \[ { omm_id: integer nombre: string, latitud: float,
 longitud: float, elevacion: integer, nivel_adm1: string, nivel_adm2:
@@ -492,10 +512,10 @@ las variables observadas en las estaciones meteorológicas incluidas en
 la base de datos del CRC-SAS. La consulta de datos puede realizarse de
 dos maneras diferentes:
 
--   búsqueda de datos para TODAS las variables observadas en UNA
-    estación meteorológica; o
--   búsqueda de datos para UNA variable observada en UNA estación
-    meteorológica.
+- búsqueda de datos para TODAS las variables observadas en UNA estación
+  meteorológica; o
+- búsqueda de datos para UNA variable observada en UNA estación
+  meteorológica.
 
 Estos servicios, además de devolver los valores diarios de las
 variables, incluyen también información resultante de los procesos de
@@ -504,24 +524,24 @@ efectuados. Esta información está presente en el atributo *estado* como
 dato categórico o etiqueta. Los valores posibles de las etiquetas son
 los siguientes:
 
--   **A**: el valor de la variable ha sido *aprobado* por el control de
-    calidad;
--   **S**: el valor de la variable ha sido declarado como *sospechoso*
-    por el control de calidad;
--   **R**: el valor de la variable ha sido declarado como sospechoso por
-    el control de calidad pero ha sido *ratificado* durante el proceso
-    de verificación manual;
--   **E** : el valor de la variable ha sido declarado como sospechoso
-    por el control de calidad y ha sido *eliminado* durante el proceso
-    de verificación manual;
--   **C**: el valor de la variable ha sido declarado como sospechoso por
-    el control de calidad y ha sido *corregido* durante el proceso de
-    verificación manual;
--   **N**: el valor de la variable ha sido declarado como sospechoso por
-    el control de calidad y ha sido declarado *no corregible* durante el
-    proceso de verificación manual;
--   **N/A**: aún no se ha ejecutado el control de calidad para la
-    estación, fecha y variable asociada.
+- **A**: el valor de la variable ha sido *aprobado* por el control de
+  calidad;
+- **S**: el valor de la variable ha sido declarado como *sospechoso* por
+  el control de calidad;
+- **R**: el valor de la variable ha sido declarado como sospechoso por
+  el control de calidad pero ha sido *ratificado* durante el proceso de
+  verificación manual;
+- **E** : el valor de la variable ha sido declarado como sospechoso por
+  el control de calidad y ha sido *eliminado* durante el proceso de
+  verificación manual;
+- **C**: el valor de la variable ha sido declarado como sospechoso por
+  el control de calidad y ha sido *corregido* durante el proceso de
+  verificación manual;
+- **N**: el valor de la variable ha sido declarado como sospechoso por
+  el control de calidad y ha sido declarado *no corregible* durante el
+  proceso de verificación manual;
+- **N/A**: aún no se ha ejecutado el control de calidad para la
+  estación, fecha y variable asociada.
 
 Puede encontrar mayor información acerca del proceso de control de
 calidad en
@@ -536,12 +556,12 @@ calidad en
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica;
--   fecha_desde: Fecha a partir de la cual se buscan datos;
--   fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior
-    a fecha_desde y la cantidad de días incluidos entre ambas fechas no
-    debe superar los 3650 días (o sea, solo se pueden buscar
-    aproximadamente 10 años por llamada al servicio).
+- omm_id: Id OMM de la estación meteorológica;
+- fecha_desde: Fecha a partir de la cual se buscan datos;
+- fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior a
+  fecha_desde y la cantidad de días incluidos entre ambas fechas no debe
+  superar los 3650 días (o sea, solo se pueden buscar aproximadamente 10
+  años por llamada al servicio).
 
 *Respuesta*: \[ { omm_id: integer fecha: date, variable_id: string,
 estado: string, valor: float }\]
@@ -600,13 +620,13 @@ ggplot2::ggplot(data = serie.temperaturas) +
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica;
--   variable_id: variable cuyos datos se van a buscar;
--   fecha_desde: Fecha a partir de la cual se buscan datos;
--   fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior
-    a fecha_desde y la cantidad de días incluidos entre ambas fechas no
-    debe superar los 3650 días (o sea, solo se pueden buscar
-    aproximadamente 10 años por llamada al servicio).
+- omm_id: Id OMM de la estación meteorológica;
+- variable_id: variable cuyos datos se van a buscar;
+- fecha_desde: Fecha a partir de la cual se buscan datos;
+- fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior a
+  fecha_desde y la cantidad de días incluidos entre ambas fechas no debe
+  superar los 3650 días (o sea, solo se pueden buscar aproximadamente 10
+  años por llamada al servicio).
 
 *Respuesta*: \[ { omm_id: integer fecha: date, variable_id: string,
 estado: string, valor: float }\]
@@ -684,8 +704,8 @@ mismo mes calendario.
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica;
--   estadistico: ver campo *id* en la tabla siguiente
+- omm_id: Id OMM de la estación meteorológica;
+- estadistico: ver campo *id* en la tabla siguiente
 
 | id                 | estadístico                                                                        |
 |--------------------|------------------------------------------------------------------------------------|
@@ -698,12 +718,12 @@ mismo mes calendario.
 | NDisponibles       | Cantidad de valores no faltantes en la muestra                                     |
 | Ocurrencia         | Cantidad de días con precipitación mayor a 0.1 mm (sólo aplicable a precipitación) |
 
--   ancho_ventana: ancho de la ventana de agregación en péntadas = { 6,
-    12, 18, 36, 54, 72, 108, 144, 216, 288 }
--   fecha_desde: Fecha a partir de la cual se buscan datos;
--   fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior
-    a fecha_desde y la cantidad de días incluidos entre ambas fechas no
-    debe superar los 3650 días.
+- ancho_ventana: ancho de la ventana de agregación en péntadas = { 6,
+  12, 18, 36, 54, 72, 108, 144, 216, 288 }
+- fecha_desde: Fecha a partir de la cual se buscan datos;
+- fecha_hasta: Fecha hasta la cual se buscan datos. Debe ser posterior a
+  fecha_desde y la cantidad de días incluidos entre ambas fechas no debe
+  superar los 3650 días.
 
 *Respuesta*: \[ { omm_id: integer fecha_desde: date, fecha_hasta: date,
 variable_id: string { tmax, tmin, prcp } valor: float }\]
@@ -781,9 +801,9 @@ meses de enero comprendidos entre 1981 y 2010.
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica;
--   referencia_ano_desde: año de inicio del período de referencia; y
--   referencia_ano_hasta: año de fin del período de referencia.
+- omm_id: Id OMM de la estación meteorológica;
+- referencia_ano_desde: año de inicio del período de referencia; y
+- referencia_ano_hasta: año de fin del período de referencia.
 
 *Respuesta*: \[ { omm_id: integer, variable_id: string { tmax, tmin,
 prcp }, mes: integer (1, 2, …, 12), normal: float,
@@ -861,9 +881,9 @@ no puede ser modificado.
 
 *Parámetros*:
 
--   omm_id: Id OMM de la estación meteorológica;
--   variable_id: variable cuyos datos se van a buscar;
--   estadistico: ver campo *id* en la tabla siguiente
+- omm_id: Id OMM de la estación meteorológica;
+- variable_id: variable cuyos datos se van a buscar;
+- estadistico: ver campo *id* en la tabla siguiente
 
 | id                 | estadístico                                                                        |
 |--------------------|------------------------------------------------------------------------------------|
@@ -876,8 +896,8 @@ no puede ser modificado.
 | NDisponibles       | Cantidad de valores no faltantes en la muestra                                     |
 | Ocurrencia         | Cantidad de días con precipitación mayor a 0.1 mm (sólo aplicable a precipitación) |
 
--   anho_desde: Año a partir de la cual se buscan datos;
--   anho_hasta: Año hasta la cual se buscan datos.
+- anho_desde: Año a partir de la cual se buscan datos;
+- anho_hasta: Año hasta la cual se buscan datos.
 
 *Respuesta*: \[ { omm_id: integer anho: integer mes: integer (1, 2, …,
 12) variable: string { tmax, tmin, prcp } estadistico: string { Suma.
@@ -934,10 +954,10 @@ knitr::kable(estadisticas.ancho)
 El CRC-SAS ha implementado el cálculo de cuatro índices o métricas de
 sequía basados en datos de estaciones meteorológicas convencionales:
 
--   Índice de Precipitación Estandarizado (SPI);
--   Índice de Precipitación - Evapotranspiración Estandarizado (SPEI);
--   Deciles de Precipitación; y
--   Porcentaje de Precipitación Normal (PPN).
+- Índice de Precipitación Estandarizado (SPI);
+- Índice de Precipitación - Evapotranspiración Estandarizado (SPEI);
+- Deciles de Precipitación; y
+- Porcentaje de Precipitación Normal (PPN).
 
 En todos los casos, los valores de los índices se calculan a partir de
 datos de precipitación acumulada. Solamente en el caso del SPEI se
@@ -977,11 +997,11 @@ Un índice de sequía asociado a una escala temporal (por ejemplo, el
 SPI-3) se puede calcular de distintas maneras. En particular,
 necesitamos conocer la siguiente información:
 
--   distribución ajustada a los datos de entrada;
--   método de estimación de los parámetros de la distribución ajustada a
-    partir de datos de entrada; y
--   período de referencia (ej.: 1971-2010) que se utilizarán para
-    ajustar la distribución.
+- distribución ajustada a los datos de entrada;
+- método de estimación de los parámetros de la distribución ajustada a
+  partir de datos de entrada; y
+- período de referencia (ej.: 1971-2010) que se utilizarán para ajustar
+  la distribución.
 
 El valor de un índice indica dónde se ubica ese valor en relación a la
 distribución ajustada a los valores de entrada. Con los datos que
@@ -1081,15 +1101,15 @@ distribución estadística ajustada para el período de referencia.
 
 *Parámetros*:
 
--   indice_configuracion_id: Id de la configuración asociada al índice y
-    escala según lo descripto en la sección de *configuraciones*;
--   omm_id: Id OMM de la estación meteorológica;
--   fecha_desde: Fecha a partir de la cual se buscan los valores de los
-    índices (debe tomarse en cuenta que la fecha de un índice
-    corresponde a la fecha de finalización del período de agregación);
--   fecha_hasta: Fecha hasta la cual se buscan los valores de los
-    índices (debe tomarse en cuenta que la fecha de un índice
-    corresponde a la fecha de finalización del período de agregación).
+- indice_configuracion_id: Id de la configuración asociada al índice y
+  escala según lo descripto en la sección de *configuraciones*;
+- omm_id: Id OMM de la estación meteorológica;
+- fecha_desde: Fecha a partir de la cual se buscan los valores de los
+  índices (debe tomarse en cuenta que la fecha de un índice corresponde
+  a la fecha de finalización del período de agregación);
+- fecha_hasta: Fecha hasta la cual se buscan los valores de los índices
+  (debe tomarse en cuenta que la fecha de un índice corresponde a la
+  fecha de finalización del período de agregación).
 
 *Respuesta*: \[ { indice_configuracion_id: integer omm_id: integer,
 pentada_fin: integer, ano: integer, metodo_imputacion_id: integer,
@@ -1133,9 +1153,9 @@ anteriormente descripto sin especificar fechas de inicio o fin.
 
 *Parámetros*:
 
--   indice_configuracion_id: Id de la configuración asociada al índice y
-    escala según lo descripto en la sección de *configuraciones*;
--   omm_id: Id OMM de la estación meteorológica;
+- indice_configuracion_id: Id de la configuración asociada al índice y
+  escala según lo descripto en la sección de *configuraciones*;
+- omm_id: Id OMM de la estación meteorológica;
 
 *Respuesta*: \[ { indice_configuracion_id: integer omm_id: integer,
 pentada_fin: integer, ano: integer, metodo_imputacion_id: integer,
@@ -1158,7 +1178,7 @@ knitr::kable(spi.3.ultimo, digits = 2)
 
 | indice_configuracion_id | omm_id | pentada_fin |  ano | metodo_imputacion_id | valor_dato | valor_indice | percentil_dato |
 |------------------------:|-------:|------------:|-----:|---------------------:|-----------:|-------------:|---------------:|
-|                      43 |  87544 |          29 | 2022 |                    0 |      254.6 |        -0.18 |          42.89 |
+|                      43 |  87544 |           1 | 2026 |                    0 |      230.9 |        -0.84 |          20.13 |
 
 ### 4.4.3. Parámetros y otros valores resultantes del ajuste de distribuciones
 
@@ -1190,9 +1210,9 @@ datos faltantes.
 
 *Parámetros*:
 
--   indice_configuracion_id: Id de la configuración asociada al índice y
-    escala según lo descripto en la sección de *configuraciones*;
--   omm_id: Id OMM de la estación meteorológica;
+- indice_configuracion_id: Id de la configuración asociada al índice y
+  escala según lo descripto en la sección de *configuraciones*;
+- omm_id: Id OMM de la estación meteorológica;
 
 *Respuesta*: \[ { indice_configuracion_id: integer omm_id: integer,
 pentada_fin: integer, parametro: string, metodo_imputacion_id: integer,
@@ -1250,9 +1270,9 @@ estadístico correspondiente (parámetro *statistic*) y el p-valor
 
 *Parámetros*:
 
--   indice_configuracion_id: Id de la configuración asociada al índice y
-    escala según lo descripto en la sección de *configuraciones*;
--   omm_id: Id OMM de la estación meteorológica;
+- indice_configuracion_id: Id de la configuración asociada al índice y
+  escala según lo descripto en la sección de *configuraciones*;
+- omm_id: Id OMM de la estación meteorológica;
 
 *Respuesta*: \[ { indice_configuracion_id: integer omm_id: integer,
 pentada_fin: integer, test: string, metodo_imputacion_id: integer,
@@ -1295,14 +1315,14 @@ eventos asociados a índices de sequía tienen una duración mínima de una
 péntada. Más aún, todas las duraciones posibles están expresadas en
 número de péntadas. Para cada evento se calculan varias métricas:
 
--   intensidad: valor promedio del índice de sequía durante el evento
-    identificado;
--   magnitud: suma de todos los valores del índice de sequía a lo largo
-    del evento;
--   duración: cantidad de péntadas durante las cuales el valor del
-    índice está por debajo o por arriba del umbral especificado; y
--   valores extremos: valores mínimo y máximo del índice durante el
-    evento.
+- intensidad: valor promedio del índice de sequía durante el evento
+  identificado;
+- magnitud: suma de todos los valores del índice de sequía a lo largo
+  del evento;
+- duración: cantidad de péntadas durante las cuales el valor del índice
+  está por debajo o por arriba del umbral especificado; y
+- valores extremos: valores mínimo y máximo del índice durante el
+  evento.
 
 Este servicio permite listar todos los eventos de algún tipo (seco o
 húmedo) para una estación e índice de sequía determinados. A fin de
@@ -1320,19 +1340,19 @@ impacto). El índice de sequía, a su vez, se especifica mediante una
 
 *Parámetros*:
 
--   indice_configuracion_id: Id de la configuración asociada al índice y
-    escala según lo descripto en la sección de configuraciones;
--   omm_id: Id OMM de la estación meteorológica;
--   tipo_evento: \[ seco, humedo \] (si el tipo evento es seco, se
-    buscan rachas de índices con valor menor o igual al umbral, mientras
-    que si es húmedo, se buscan rachas de índices con valor mayor o
-    igual al umbral);
--   umbral_indice: valor del índice por debajo (eventos secos) o por
-    encima (eventos húmedos) del cual se considera la ocurrencia de un
-    evento;
--   duracion_minina: cantidad mínima de péntadas que debe durar un
-    período con valores de índices por debajo o por encima del umbral
-    para que el suceso se considere un evento posibles impactos.
+- indice_configuracion_id: Id de la configuración asociada al índice y
+  escala según lo descripto en la sección de configuraciones;
+- omm_id: Id OMM de la estación meteorológica;
+- tipo_evento: \[ seco, humedo \] (si el tipo evento es seco, se buscan
+  rachas de índices con valor menor o igual al umbral, mientras que si
+  es húmedo, se buscan rachas de índices con valor mayor o igual al
+  umbral);
+- umbral_indice: valor del índice por debajo (eventos secos) o por
+  encima (eventos húmedos) del cual se considera la ocurrencia de un
+  evento;
+- duracion_minina: cantidad mínima de péntadas que debe durar un período
+  con valores de índices por debajo o por encima del umbral para que el
+  suceso se considere un evento posibles impactos.
 
 *Respuesta*: \[ { omm_id: id OMM de la estación meteorológica,
 numero_evento: integer (ordinal), fecha_inicio: date (fecha de inicio
@@ -1369,6 +1389,7 @@ knitr::kable(eventos.pehuajo, digits = 2)
 |  87544 |             3 | 1995-08-11   | 1996-01-20 |      -2.07 |   -66.17 |       32 |  -2.72 |  -1.51 |
 |  87544 |             4 | 2009-01-06   | 2009-06-25 |      -2.02 |   -68.60 |       34 |  -2.69 |  -1.34 |
 |  87544 |             5 | 2019-09-11   | 2019-12-25 |      -2.52 |   -52.97 |       21 |  -3.00 |  -1.75 |
+|  87544 |             6 | 2023-01-21   | 2023-07-10 |      -2.12 |   -72.23 |       34 |  -3.00 |  -1.29 |
 
 ## 4.6. Índices de vegetación (NDVI y EVI) a partir de datos satelitales
 
@@ -1385,22 +1406,21 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Gauss-Krüger: sistema de coordenadas planares expresadas en
-        metros;
-    -   String de proyección: +proj=tmerc +lat_0=-90 +lon_0=-60 +k=1
-        +x_0=5500000 +y_0=0 +ellps=intl +units=m +no_defs (válido para
-        el Sur de Sudamérica);
-    -   Código EPSG: 22195 (Campo Inchauspe / Argentina 5).
--   Dimensiones:
-    -   easting: coordenada longitudinal expresada en metros (sistema
-        Gauss-Krüger);
-    -   northing: coordenada latitudinal expresada en metros (sistema
-        Gauss-Krüger);
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde al inicio del período asociado a la capa de datos.
--   Variables:
-    -   ndvi o evi: índice de vegetación seleccionado.
+- Sistema de coordenadas:
+  - Gauss-Krüger: sistema de coordenadas planares expresadas en metros;
+  - String de proyección: +proj=tmerc +lat_0=-90 +lon_0=-60 +k=1
+    +x_0=5500000 +y_0=0 +ellps=intl +units=m +no_defs (válido para el
+    Sur de Sudamérica);
+  - Código EPSG: 22195 (Campo Inchauspe / Argentina 5).
+- Dimensiones:
+  - easting: coordenada longitudinal expresada en metros (sistema
+    Gauss-Krüger);
+  - northing: coordenada latitudinal expresada en metros (sistema
+    Gauss-Krüger);
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde al inicio del período asociado a la capa de datos.
+- Variables:
+  - ndvi o evi: índice de vegetación seleccionado.
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -1415,16 +1435,16 @@ obtener directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   indice: índice de vegetación a consultar (ndvi o evi);
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- indice: índice de vegetación a consultar (ndvi o evi);
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -1503,16 +1523,16 @@ que el usuario desee agregar.
 
 *Parámetros*:
 
--   indice: índice de vegetación a consultar (ndvi o evi);
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- indice: índice de vegetación a consultar (ndvi o evi);
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -1532,14 +1552,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -1564,22 +1584,22 @@ knitr::kable(datos.ndvi)
 
 | nombre  | fecha      |  valor |
 |:--------|:-----------|-------:|
-| Lugar 1 | 2019-01-01 | 0.7364 |
-| Lugar 1 | 2019-01-09 | 0.7958 |
-| Lugar 1 | 2019-01-17 | 0.8067 |
-| Lugar 1 | 2019-01-25 | 0.8348 |
-| Lugar 2 | 2019-01-01 | 0.6335 |
-| Lugar 2 | 2019-01-09 | 0.8109 |
-| Lugar 2 | 2019-01-17 | 0.8450 |
-| Lugar 2 | 2019-01-25 | 0.8975 |
-| Lugar 3 | 2019-01-01 | 0.6556 |
-| Lugar 3 | 2019-01-09 | 0.6808 |
-| Lugar 3 | 2019-01-17 | 0.6767 |
-| Lugar 3 | 2019-01-25 | 0.7233 |
-| Lugar 4 | 2019-01-01 | 0.5909 |
-| Lugar 4 | 2019-01-09 | 0.6446 |
-| Lugar 4 | 2019-01-17 | 0.6674 |
-| Lugar 4 | 2019-01-25 | 0.6883 |
+| Lugar 1 | 2019-01-01 | 0.7361 |
+| Lugar 1 | 2019-01-09 | 0.7945 |
+| Lugar 1 | 2019-01-17 | 0.7977 |
+| Lugar 1 | 2019-01-25 | 0.8336 |
+| Lugar 2 | 2019-01-01 | 0.6300 |
+| Lugar 2 | 2019-01-09 | 0.8096 |
+| Lugar 2 | 2019-01-17 | 0.8433 |
+| Lugar 2 | 2019-01-25 | 0.8963 |
+| Lugar 3 | 2019-01-01 | 0.6567 |
+| Lugar 3 | 2019-01-09 | 0.6796 |
+| Lugar 3 | 2019-01-17 | 0.6675 |
+| Lugar 3 | 2019-01-25 | 0.7224 |
+| Lugar 4 | 2019-01-01 | 0.5938 |
+| Lugar 4 | 2019-01-09 | 0.6442 |
+| Lugar 4 | 2019-01-17 | 0.6656 |
+| Lugar 4 | 2019-01-25 | 0.6867 |
 
 Finalmente, se presenta un ejemplo para 3 polígonos correspondientes a
 zonas dentro de provincias argentinas (Buenos Aires, Santa Fe y
@@ -1601,54 +1621,54 @@ knitr::kable(datos.ndvi)
 
 | nombre       | estadistico | fecha      |   valor |
 |:-------------|:------------|:-----------|--------:|
-| Buenos Aires | 0%          | 2019-01-01 |  0.0161 |
-| Buenos Aires | 25%         | 2019-01-01 |  0.6263 |
-| Buenos Aires | 50%         | 2019-01-01 |  0.6876 |
-| Buenos Aires | 75%         | 2019-01-01 |  0.7403 |
-| Buenos Aires | 100%        | 2019-01-01 |  0.9223 |
-| Buenos Aires | Media       | 2019-01-01 |  0.6753 |
+| Buenos Aires | 0%          | 2019-01-01 |  0.0159 |
+| Buenos Aires | 25%         | 2019-01-01 |  0.6246 |
+| Buenos Aires | 50%         | 2019-01-01 |  0.6859 |
+| Buenos Aires | 75%         | 2019-01-01 |  0.7389 |
+| Buenos Aires | 100%        | 2019-01-01 |  0.9203 |
 | Buenos Aires | Desvio      | 2019-01-01 |  0.0987 |
-| Buenos Aires | MAD         | 2019-01-01 |  0.0835 |
-| Buenos Aires | 0%          | 2019-01-09 | -0.1545 |
-| Buenos Aires | 25%         | 2019-01-09 |  0.6678 |
-| Buenos Aires | 50%         | 2019-01-09 |  0.7245 |
-| Buenos Aires | 75%         | 2019-01-09 |  0.7758 |
-| Buenos Aires | 100%        | 2019-01-09 |  0.9213 |
-| Buenos Aires | Media       | 2019-01-09 |  0.7133 |
-| Buenos Aires | Desvio      | 2019-01-09 |  0.0965 |
-| Buenos Aires | MAD         | 2019-01-09 |  0.0800 |
-| Cordoba      | 0%          | 2019-01-01 | -0.1411 |
-| Cordoba      | 25%         | 2019-01-01 |  0.5256 |
-| Cordoba      | 50%         | 2019-01-01 |  0.6133 |
-| Cordoba      | 75%         | 2019-01-01 |  0.7165 |
-| Cordoba      | 100%        | 2019-01-01 |  0.9243 |
-| Cordoba      | Media       | 2019-01-01 |  0.6191 |
-| Cordoba      | Desvio      | 2019-01-01 |  0.1280 |
-| Cordoba      | MAD         | 2019-01-01 |  0.1402 |
-| Cordoba      | 0%          | 2019-01-09 | -0.0588 |
-| Cordoba      | 25%         | 2019-01-09 |  0.6085 |
-| Cordoba      | 50%         | 2019-01-09 |  0.7056 |
-| Cordoba      | 75%         | 2019-01-09 |  0.7829 |
-| Cordoba      | 100%        | 2019-01-09 |  0.9362 |
-| Cordoba      | Media       | 2019-01-09 |  0.6902 |
-| Cordoba      | Desvio      | 2019-01-09 |  0.1195 |
-| Cordoba      | MAD         | 2019-01-09 |  0.1261 |
-| Uruguay      | 0%          | 2019-01-01 | -0.1690 |
-| Uruguay      | 25%         | 2019-01-01 |  0.6430 |
-| Uruguay      | 50%         | 2019-01-01 |  0.6880 |
-| Uruguay      | 75%         | 2019-01-01 |  0.7278 |
-| Uruguay      | 100%        | 2019-01-01 |  0.8817 |
-| Uruguay      | Media       | 2019-01-01 |  0.6724 |
-| Uruguay      | Desvio      | 2019-01-01 |  0.1074 |
-| Uruguay      | MAD         | 2019-01-01 |  0.0623 |
-| Uruguay      | 0%          | 2019-01-09 | -0.1945 |
-| Uruguay      | 25%         | 2019-01-09 |  0.6291 |
-| Uruguay      | 50%         | 2019-01-09 |  0.6660 |
-| Uruguay      | 75%         | 2019-01-09 |  0.6996 |
-| Uruguay      | 100%        | 2019-01-09 |  0.8687 |
-| Uruguay      | Media       | 2019-01-09 |  0.6570 |
-| Uruguay      | Desvio      | 2019-01-09 |  0.0912 |
-| Uruguay      | MAD         | 2019-01-09 |  0.0517 |
+| Buenos Aires | MAD         | 2019-01-01 |  0.0838 |
+| Buenos Aires | Media       | 2019-01-01 |  0.6739 |
+| Buenos Aires | 0%          | 2019-01-09 | -0.1539 |
+| Buenos Aires | 25%         | 2019-01-09 |  0.6663 |
+| Buenos Aires | 50%         | 2019-01-09 |  0.7232 |
+| Buenos Aires | 75%         | 2019-01-09 |  0.7747 |
+| Buenos Aires | 100%        | 2019-01-09 |  0.9207 |
+| Buenos Aires | Desvio      | 2019-01-09 |  0.0966 |
+| Buenos Aires | MAD         | 2019-01-09 |  0.0802 |
+| Buenos Aires | Media       | 2019-01-09 |  0.7120 |
+| Cordoba      | 0%          | 2019-01-01 | -0.0401 |
+| Cordoba      | 25%         | 2019-01-01 |  0.5047 |
+| Cordoba      | 50%         | 2019-01-01 |  0.5852 |
+| Cordoba      | 75%         | 2019-01-01 |  0.6724 |
+| Cordoba      | 100%        | 2019-01-01 |  0.9119 |
+| Cordoba      | Desvio      | 2019-01-01 |  0.1182 |
+| Cordoba      | MAD         | 2019-01-01 |  0.1243 |
+| Cordoba      | Media       | 2019-01-01 |  0.5886 |
+| Cordoba      | 0%          | 2019-01-09 | -0.0593 |
+| Cordoba      | 25%         | 2019-01-09 |  0.6070 |
+| Cordoba      | 50%         | 2019-01-09 |  0.7040 |
+| Cordoba      | 75%         | 2019-01-09 |  0.7812 |
+| Cordoba      | 100%        | 2019-01-09 |  0.9352 |
+| Cordoba      | Desvio      | 2019-01-09 |  0.1193 |
+| Cordoba      | MAD         | 2019-01-09 |  0.1258 |
+| Cordoba      | Media       | 2019-01-09 |  0.6888 |
+| Uruguay      | 0%          | 2019-01-01 | -0.1729 |
+| Uruguay      | 25%         | 2019-01-01 |  0.6378 |
+| Uruguay      | 50%         | 2019-01-01 |  0.6850 |
+| Uruguay      | 75%         | 2019-01-01 |  0.7282 |
+| Uruguay      | 100%        | 2019-01-01 |  0.8865 |
+| Uruguay      | Desvio      | 2019-01-01 |  0.1106 |
+| Uruguay      | MAD         | 2019-01-01 |  0.0667 |
+| Uruguay      | Media       | 2019-01-01 |  0.6688 |
+| Uruguay      | 0%          | 2019-01-09 | -0.1957 |
+| Uruguay      | 25%         | 2019-01-09 |  0.6279 |
+| Uruguay      | 50%         | 2019-01-09 |  0.6648 |
+| Uruguay      | 75%         | 2019-01-09 |  0.6985 |
+| Uruguay      | 100%        | 2019-01-09 |  0.8680 |
+| Uruguay      | Desvio      | 2019-01-09 |  0.0911 |
+| Uruguay      | MAD         | 2019-01-09 |  0.0518 |
+| Uruguay      | Media       | 2019-01-09 |  0.6556 |
 
 ## 4.7. Precipitaciones estimadas por el producto CHIRPS
 
@@ -1670,23 +1690,21 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   prcp: precipitación estimada por satélite acumulada por péntadas
-        o meses (según se especifique).
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - prcp: precipitación estimada por satélite acumulada por péntadas o
+    meses (según se especifique).
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -1700,17 +1718,17 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   periodo: período de agregación temporal de los datos (P: péntadas o
-    M: mes);
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- periodo: período de agregación temporal de los datos (P: péntadas o M:
+  mes);
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -1789,17 +1807,17 @@ que el usuario desee agregar.
 
 *Parámetros*:
 
--   periodo: período de agregación temporal de los datos (P: péntadas o
-    M: mes);
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- periodo: período de agregación temporal de los datos (P: péntadas o M:
+  mes);
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -1819,14 +1837,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -1889,49 +1907,49 @@ knitr::kable(datos.prcp)
 | Buenos Aires | 50%         | 2019-01-01 | 199.9755 |
 | Buenos Aires | 75%         | 2019-01-01 | 213.9939 |
 | Buenos Aires | 100%        | 2019-01-01 | 267.4781 |
-| Buenos Aires | Media       | 2019-01-01 | 204.9081 |
 | Buenos Aires | Desvio      | 2019-01-01 |  17.5320 |
 | Buenos Aires | MAD         | 2019-01-01 |  13.5045 |
+| Buenos Aires | Media       | 2019-01-01 | 204.9081 |
 | Buenos Aires | 0%          | 2019-02-01 |  39.7508 |
 | Buenos Aires | 25%         | 2019-02-01 |  62.7362 |
 | Buenos Aires | 50%         | 2019-02-01 |  68.8801 |
 | Buenos Aires | 75%         | 2019-02-01 |  74.0915 |
 | Buenos Aires | 100%        | 2019-02-01 |  85.9510 |
-| Buenos Aires | Media       | 2019-02-01 |  67.2280 |
 | Buenos Aires | Desvio      | 2019-02-01 |   9.2723 |
 | Buenos Aires | MAD         | 2019-02-01 |   8.2983 |
+| Buenos Aires | Media       | 2019-02-01 |  67.2280 |
 | Cordoba      | 0%          | 2019-01-01 | 104.2619 |
 | Cordoba      | 25%         | 2019-01-01 | 141.1514 |
 | Cordoba      | 50%         | 2019-01-01 | 162.9541 |
 | Cordoba      | 75%         | 2019-01-01 | 182.1200 |
 | Cordoba      | 100%        | 2019-01-01 | 256.6184 |
-| Cordoba      | Media       | 2019-01-01 | 166.1185 |
 | Cordoba      | Desvio      | 2019-01-01 |  33.4216 |
 | Cordoba      | MAD         | 2019-01-01 |  31.4784 |
+| Cordoba      | Media       | 2019-01-01 | 166.1185 |
 | Cordoba      | 0%          | 2019-02-01 |  20.8781 |
 | Cordoba      | 25%         | 2019-02-01 |  37.7954 |
 | Cordoba      | 50%         | 2019-02-01 |  44.0428 |
 | Cordoba      | 75%         | 2019-02-01 |  53.4448 |
 | Cordoba      | 100%        | 2019-02-01 |  77.0143 |
-| Cordoba      | Media       | 2019-02-01 |  46.4813 |
 | Cordoba      | Desvio      | 2019-02-01 |  11.3705 |
 | Cordoba      | MAD         | 2019-02-01 |  11.0257 |
+| Cordoba      | Media       | 2019-02-01 |  46.4813 |
 | Uruguay      | 0%          | 2019-01-01 | 249.7942 |
 | Uruguay      | 25%         | 2019-01-01 | 292.1535 |
 | Uruguay      | 50%         | 2019-01-01 | 305.5407 |
 | Uruguay      | 75%         | 2019-01-01 | 318.2879 |
 | Uruguay      | 100%        | 2019-01-01 | 372.7469 |
-| Uruguay      | Media       | 2019-01-01 | 304.6796 |
 | Uruguay      | Desvio      | 2019-01-01 |  20.1602 |
 | Uruguay      | MAD         | 2019-01-01 |  19.6277 |
+| Uruguay      | Media       | 2019-01-01 | 304.6796 |
 | Uruguay      | 0%          | 2019-02-01 |  57.2918 |
 | Uruguay      | 25%         | 2019-02-01 |  75.8760 |
 | Uruguay      | 50%         | 2019-02-01 |  81.9168 |
 | Uruguay      | 75%         | 2019-02-01 |  91.9705 |
 | Uruguay      | 100%        | 2019-02-01 | 128.5148 |
-| Uruguay      | Media       | 2019-02-01 |  86.7375 |
 | Uruguay      | Desvio      | 2019-02-01 |  14.8448 |
 | Uruguay      | MAD         | 2019-02-01 |  10.0489 |
+| Uruguay      | Media       | 2019-02-01 |  86.7375 |
 
 ### 4.7.2. Índices de sequía basados en precipitaciones estimadas usando el producto CHIRPS
 
@@ -1953,24 +1971,22 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   spi \| percentile: valor de índice de sequía SPI o percentil
-        calculado a partir de precipitaciones extraídas del producto
-        CHIRPS, para la escala temporal especificada.
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - spi \| percentile: valor de índice de sequía SPI o percentil
+    calculado a partir de precipitaciones extraídas del producto CHIRPS,
+    para la escala temporal especificada.
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -1985,19 +2001,19 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   producto: { spi = SPI, percentile = percentil asociado al monto de
-    precipitaciones acumuladas en el período };
--   escala: escala temporal “ET” de agregación (en meses; 3, 6 o 12) del
-    índice de sequía SPI o percentil;
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { spi = SPI, percentile = percentil asociado al monto de
+  precipitaciones acumuladas en el período };
+- escala: escala temporal “ET” de agregación (en meses; 3, 6 o 12) del
+  índice de sequía SPI o percentil;
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -2080,19 +2096,19 @@ que el usuario desee agregar.
 
 *Parámetros*:
 
--   producto: { spi = SPI, percentile = percentil asociado al monto de
-    precipitaciones acumuladas en el período };
--   escala: escala temporal “ET” de agregación (en meses; 3, 6 o 12) del
-    índice de sequía SPI o percentil;
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { spi = SPI, percentile = percentil asociado al monto de
+  precipitaciones acumuladas en el período };
+- escala: escala temporal “ET” de agregación (en meses; 3, 6 o 12) del
+  índice de sequía SPI o percentil;
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -2112,14 +2128,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -2182,49 +2198,49 @@ knitr::kable(datos.spi3)
 | Buenos Aires | 50%         | 2019-01-01 |  0.3980 |
 | Buenos Aires | 75%         | 2019-01-01 |  0.5374 |
 | Buenos Aires | 100%        | 2019-01-01 |  0.8423 |
-| Buenos Aires | Media       | 2019-01-01 |  0.3911 |
 | Buenos Aires | Desvio      | 2019-01-01 |  0.1849 |
 | Buenos Aires | MAD         | 2019-01-01 |  0.2142 |
+| Buenos Aires | Media       | 2019-01-01 |  0.3911 |
 | Buenos Aires | 0%          | 2019-01-06 |  0.4098 |
 | Buenos Aires | 25%         | 2019-01-06 |  0.5933 |
 | Buenos Aires | 50%         | 2019-01-06 |  0.7258 |
 | Buenos Aires | 75%         | 2019-01-06 |  0.8388 |
 | Buenos Aires | 100%        | 2019-01-06 |  1.1238 |
-| Buenos Aires | Media       | 2019-01-06 |  0.7293 |
 | Buenos Aires | Desvio      | 2019-01-06 |  0.1654 |
 | Buenos Aires | MAD         | 2019-01-06 |  0.1805 |
+| Buenos Aires | Media       | 2019-01-06 |  0.7293 |
 | Cordoba      | 0%          | 2019-01-01 | -1.1062 |
 | Cordoba      | 25%         | 2019-01-01 | -0.3529 |
 | Cordoba      | 50%         | 2019-01-01 |  0.1425 |
 | Cordoba      | 75%         | 2019-01-01 |  0.4282 |
 | Cordoba      | 100%        | 2019-01-01 |  1.2773 |
-| Cordoba      | Media       | 2019-01-01 |  0.0558 |
 | Cordoba      | Desvio      | 2019-01-01 |  0.5636 |
 | Cordoba      | MAD         | 2019-01-01 |  0.5220 |
+| Cordoba      | Media       | 2019-01-01 |  0.0558 |
 | Cordoba      | 0%          | 2019-01-06 | -0.5794 |
 | Cordoba      | 25%         | 2019-01-06 |  0.1742 |
 | Cordoba      | 50%         | 2019-01-06 |  0.6288 |
 | Cordoba      | 75%         | 2019-01-06 |  0.9593 |
 | Cordoba      | 100%        | 2019-01-06 |  1.4607 |
-| Cordoba      | Media       | 2019-01-06 |  0.5502 |
 | Cordoba      | Desvio      | 2019-01-06 |  0.5007 |
 | Cordoba      | MAD         | 2019-01-06 |  0.5279 |
+| Cordoba      | Media       | 2019-01-06 |  0.5502 |
 | Uruguay      | 0%          | 2019-01-01 |  0.4794 |
 | Uruguay      | 25%         | 2019-01-01 |  0.5951 |
 | Uruguay      | 50%         | 2019-01-01 |  0.6368 |
 | Uruguay      | 75%         | 2019-01-01 |  0.6988 |
 | Uruguay      | 100%        | 2019-01-01 |  0.8053 |
-| Uruguay      | Media       | 2019-01-01 |  0.6487 |
 | Uruguay      | Desvio      | 2019-01-01 |  0.0750 |
 | Uruguay      | MAD         | 2019-01-01 |  0.0737 |
+| Uruguay      | Media       | 2019-01-01 |  0.6487 |
 | Uruguay      | 0%          | 2019-01-06 |  0.8694 |
 | Uruguay      | 25%         | 2019-01-06 |  0.9657 |
 | Uruguay      | 50%         | 2019-01-06 |  0.9973 |
 | Uruguay      | 75%         | 2019-01-06 |  1.0322 |
 | Uruguay      | 100%        | 2019-01-06 |  1.0960 |
-| Uruguay      | Media       | 2019-01-06 |  0.9979 |
 | Uruguay      | Desvio      | 2019-01-06 |  0.0461 |
 | Uruguay      | MAD         | 2019-01-06 |  0.0491 |
+| Uruguay      | Media       | 2019-01-06 |  0.9979 |
 
 ### 4.7.3. Pronósticos de precipitación y sequía a 15 días usando el producto CHIRPS-GEFS
 
@@ -2260,26 +2276,24 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   forecasted_total \| total \| spi \| percentile: valor de
-        precipitación pronosticada a 15 días (forecasted_total),
-        ensamble de precipitación acumulada observada/pronosticada
-        (total), índice SPI (spi) o percentil asociado, para la escala
-        temporal especificada (percentile).
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - forecasted_total \| total \| spi \| percentile: valor de
+    precipitación pronosticada a 15 días (forecasted_total), ensamble de
+    precipitación acumulada observada/pronosticada (total), índice SPI
+    (spi) o percentil asociado, para la escala temporal especificada
+    (percentile).
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -2294,21 +2308,21 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   producto: { forecasted_total = valor de precipitación pronosticada a
-    15 días, total = ensamble de precipitación acumulada
-    observada/pronosticada, spi = índice SPI, percentile = percentil
-    asociado, para la escala temporal especificada };
--   escala: escala temporal “ET” de agregación (por el momento solamente
-    3 meses);
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { forecasted_total = valor de precipitación pronosticada a
+  15 días, total = ensamble de precipitación acumulada
+  observada/pronosticada, spi = índice SPI, percentile = percentil
+  asociado, para la escala temporal especificada };
+- escala: escala temporal “ET” de agregación (por el momento solamente 3
+  meses);
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -2400,23 +2414,21 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   esi \| percentiles: valor de índice ESI o percentil asociado,
-        para la escala temporal especificada.
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - esi \| percentiles: valor de índice ESI o percentil asociado, para
+    la escala temporal especificada.
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -2431,19 +2443,19 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   producto: { esi = índice ESI, percentiles = percentils asociado
-    índice ESI };
--   escala: escala temporal “ET” de agregación del ESI o percentiles {
-    4WK = 4 semanas, 12WK = 12 semanas };
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { esi = índice ESI, percentiles = percentils asociado índice
+  ESI };
+- escala: escala temporal “ET” de agregación del ESI o percentiles { 4WK
+  = 4 semanas, 12WK = 12 semanas };
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -2523,19 +2535,19 @@ que el usuario desee agregar.
 
 *Parámetros*:
 
--   producto: { esi = índice ESI, percentiles = percentils asociado
-    índice ESI };
--   escala: escala temporal “ET” de agregación del ESI o percentiles {
-    4WK = 4 semanas, 12WK = 12 semanas };
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { esi = índice ESI, percentiles = percentils asociado índice
+  ESI };
+- escala: escala temporal “ET” de agregación del ESI o percentiles { 4WK
+  = 4 semanas, 12WK = 12 semanas };
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -2555,14 +2567,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -2629,49 +2641,49 @@ knitr::kable(datos.esi)
 | Buenos Aires | 50%         | 2019-01-08 |  1.6139 |
 | Buenos Aires | 75%         | 2019-01-08 |  1.8178 |
 | Buenos Aires | 100%        | 2019-01-08 |  2.6498 |
-| Buenos Aires | Media       | 2019-01-08 |  1.6387 |
 | Buenos Aires | Desvio      | 2019-01-08 |  0.2871 |
 | Buenos Aires | MAD         | 2019-01-08 |  0.2732 |
+| Buenos Aires | Media       | 2019-01-08 |  1.6387 |
 | Buenos Aires | 0%          | 2019-01-15 |  1.1135 |
 | Buenos Aires | 25%         | 2019-01-15 |  1.7065 |
 | Buenos Aires | 50%         | 2019-01-15 |  1.9255 |
 | Buenos Aires | 75%         | 2019-01-15 |  2.1792 |
 | Buenos Aires | 100%        | 2019-01-15 |  3.5000 |
-| Buenos Aires | Media       | 2019-01-15 |  1.9667 |
 | Buenos Aires | Desvio      | 2019-01-15 |  0.3736 |
 | Buenos Aires | MAD         | 2019-01-15 |  0.3553 |
+| Buenos Aires | Media       | 2019-01-15 |  1.9667 |
 | Cordoba      | 0%          | 2019-01-08 | -0.9606 |
 | Cordoba      | 25%         | 2019-01-08 |  0.1445 |
 | Cordoba      | 50%         | 2019-01-08 |  0.7749 |
 | Cordoba      | 75%         | 2019-01-08 |  1.3972 |
 | Cordoba      | 100%        | 2019-01-08 |  2.9342 |
-| Cordoba      | Media       | 2019-01-08 |  0.7868 |
 | Cordoba      | Desvio      | 2019-01-08 |  0.7589 |
 | Cordoba      | MAD         | 2019-01-08 |  0.9262 |
+| Cordoba      | Media       | 2019-01-08 |  0.7868 |
 | Cordoba      | 0%          | 2019-01-15 |  0.0937 |
 | Cordoba      | 25%         | 2019-01-15 |  1.0782 |
 | Cordoba      | 50%         | 2019-01-15 |  1.6112 |
 | Cordoba      | 75%         | 2019-01-15 |  2.2889 |
 | Cordoba      | 100%        | 2019-01-15 |  3.5000 |
-| Cordoba      | Media       | 2019-01-15 |  1.7121 |
 | Cordoba      | Desvio      | 2019-01-15 |  0.7915 |
 | Cordoba      | MAD         | 2019-01-15 |  0.8593 |
+| Cordoba      | Media       | 2019-01-15 |  1.7121 |
 | Uruguay      | 0%          | 2019-01-08 |  0.5260 |
 | Uruguay      | 25%         | 2019-01-08 |  1.4537 |
 | Uruguay      | 50%         | 2019-01-08 |  1.6513 |
 | Uruguay      | 75%         | 2019-01-08 |  1.8440 |
 | Uruguay      | 100%        | 2019-01-08 |  2.4932 |
-| Uruguay      | Media       | 2019-01-08 |  1.6395 |
 | Uruguay      | Desvio      | 2019-01-08 |  0.3016 |
 | Uruguay      | MAD         | 2019-01-08 |  0.2887 |
+| Uruguay      | Media       | 2019-01-08 |  1.6395 |
 | Uruguay      | 0%          | 2019-01-15 |  0.9912 |
 | Uruguay      | 25%         | 2019-01-15 |  1.6502 |
 | Uruguay      | 50%         | 2019-01-15 |  1.8414 |
 | Uruguay      | 75%         | 2019-01-15 |  2.0123 |
 | Uruguay      | 100%        | 2019-01-15 |  2.5436 |
-| Uruguay      | Media       | 2019-01-15 |  1.8371 |
 | Uruguay      | Desvio      | 2019-01-15 |  0.2796 |
 | Uruguay      | MAD         | 2019-01-15 |  0.2669 |
+| Uruguay      | Media       | 2019-01-15 |  1.8371 |
 
 ## 4.9. Estimaciones de humedad del suelo y contenido del agua sub-superficial (GRACE).
 
@@ -2692,37 +2704,36 @@ tres productos están disponibles en el sitio
 <https://nasagrace.unl.edu/> con frecuencia semanal y datos desde
 febrero de 2003 hasta la fecha.
 
-Este servicio permite consultar valores de los productos GRACE gws_inst
-- Groundwater Percentile (Contenido de agua subterránea, expresado en
-percentiles), rtzsm_inst - Root Zone Soil Moisture Percentile (Humedad
-del suelo en zona de raíces, expresada en percentiles), sfsm_inst -
-Surface Soil Moisture Percentile (Humedad superficial del suelo,
-expresada en percentiles) para cualquier área incluida dentro del
-CRC-SAS, la cual debe especificarse en formato GeoJSON \[17\]. Para
-limitar el volumen de datos a transferir por medio del servicio, el área
-de la zona especificada no debe exceder los 2.000.000 km<sup>2</sup>.
+Este servicio permite consultar valores de los productos GRACE
+gws_inst - Groundwater Percentile (Contenido de agua subterránea,
+expresado en percentiles), rtzsm_inst - Root Zone Soil Moisture
+Percentile (Humedad del suelo en zona de raíces, expresada en
+percentiles), sfsm_inst - Surface Soil Moisture Percentile (Humedad
+superficial del suelo, expresada en percentiles) para cualquier área
+incluida dentro del CRC-SAS, la cual debe especificarse en formato
+GeoJSON \[17\]. Para limitar el volumen de datos a transferir por medio
+del servicio, el área de la zona especificada no debe exceder los
+2.000.000 km<sup>2</sup>.
 
 El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   gws_inst o rtzsm_inst o sfsm_inst: producto seleccionado,
-        expresado en percentiles.
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - gws_inst o rtzsm_inst o sfsm_inst: producto seleccionado, expresado
+    en percentiles.
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -2736,20 +2747,20 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   producto: \*\* gws_inst: Groundwater Percentile (Contenido de agua
-    subterránea, expresado en percentiles) \*\* rtzsm_inst: Root Zone
-    Soil Moisture Percentile (Humedad del suelo en zona de raíces,
-    expresada en percentiles) \*\* sfsm_inst: Surface Soil Moisture
-    Percentile (Humedad superficial del suelo, expresada en percentiles)
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: \*\* gws_inst: Groundwater Percentile (Contenido de agua
+  subterránea, expresado en percentiles) \*\* rtzsm_inst: Root Zone Soil
+  Moisture Percentile (Humedad del suelo en zona de raíces, expresada en
+  percentiles) \*\* sfsm_inst: Surface Soil Moisture Percentile (Humedad
+  superficial del suelo, expresada en percentiles)
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -2940,8 +2951,8 @@ fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -2961,14 +2972,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -3040,8 +3051,6 @@ ggplot2::ggplot(data = datos.grace) +
   ggplot2::theme_bw()
 ```
 
-    ## Warning: Removed 2 rows containing missing values (geom_point).
-
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-38-1.png" style="display: block; margin: auto;" />
 
 Finalmente, se presenta un ejemplo para 1 polígono correspondiente al
@@ -3058,7 +3067,7 @@ datos.grace <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
 
 # Mostrar datos en formato tabular
-knitr::kable(head(datos.grace, 15))
+knitr::kable(head(datos.grace, 16))
 ```
 
 | NAME   | estadistico | fecha      |   valor |
@@ -3068,16 +3077,17 @@ knitr::kable(head(datos.grace, 15))
 | Itapúa | 50%         | 2011-01-03 | 82.4830 |
 | Itapúa | 75%         | 2011-01-03 | 85.7321 |
 | Itapúa | 100%        | 2011-01-03 | 87.9798 |
-| Itapúa | Media       | 2011-01-03 | 83.1993 |
 | Itapúa | Desvio      | 2011-01-03 |  3.0883 |
 | Itapúa | MAD         | 2011-01-03 |  2.6933 |
+| Itapúa | Media       | 2011-01-03 | 83.1993 |
 | Itapúa | 0%          | 2011-01-10 | 76.8699 |
 | Itapúa | 25%         | 2011-01-10 | 81.5711 |
 | Itapúa | 50%         | 2011-01-10 | 84.5759 |
 | Itapúa | 75%         | 2011-01-10 | 87.2439 |
 | Itapúa | 100%        | 2011-01-10 | 89.3736 |
-| Itapúa | Media       | 2011-01-10 | 84.2310 |
 | Itapúa | Desvio      | 2011-01-10 |  3.6148 |
+| Itapúa | MAD         | 2011-01-10 |  4.2140 |
+| Itapúa | Media       | 2011-01-10 | 84.2310 |
 
 ``` r
 # Buscar GRACE desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
@@ -3144,23 +3154,20 @@ El servicio devuelve como respuesta un stream de datos binarios
 correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
 NetCDF tiene la siguiente estructura de dimensiones y variables:
 
--   Sistema de coordenadas:
-    -   Latitud/Longitud: sistema de coordenadas expresadas en grados
-        decimales;
-    -   String de proyección: +proj=longlat +datum=WGS84 +no_defs
-        +ellps=WGS84 +towgs84=0,0,0;
-    -   Código EPSG: 4326.
--   Dimensiones:
-    -   longitude: coordenada X (o longitud) expresada en grados
-        decimales;
-    -   latitude: coordenada Y (o latitud) expresada en grados
-        decimales;
-    -   time: cantidad de días desde el 1 de Enero de 1970 (día 0);
-        corresponde a la fecha de inicio de la péntada o mes asociado a
-        la capa de datos.
--   Variables:
-    -   soil_moisture_am: valor de humedad de capa superficial del
-        suelo.
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - String de proyección: +proj=longlat +datum=WGS84 +no_defs
+    +ellps=WGS84 +towgs84=0,0,0;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - longitude: coordenada X (o longitud) expresada en grados decimales;
+  - latitude: coordenada Y (o latitud) expresada en grados decimales;
+  - time: cantidad de días desde el 1 de Enero de 1970 (día 0);
+    corresponde a la fecha de inicio de la péntada o mes asociado a la
+    capa de datos.
+- Variables:
+  - soil_moisture_am: valor de humedad de capa superficial del suelo.
 
 Con el propósito de facilitar la manipulación de los datos devueltos
 (que requiere conocimiento sobre archivos NetCDF), se recomienda
@@ -3174,16 +3181,16 @@ directamente un objeto de tipo *raster* \[19\].
 
 *Parámetros*:
 
--   producto: { soil_moisture_am = Soil Moisture AM };
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { soil_moisture_am = Soil Moisture AM };
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa la zona sobre
-    la cual se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa la zona sobre
+  la cual se efectuará la consulta.
 
 *Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
 descripción en párrafos anteriores).
@@ -3293,16 +3300,16 @@ que el usuario desee agregar.
 
 *Parámetros*:
 
--   producto: { soil_moisture_am = Soil Moisture AM };
--   fecha_desde: fecha de inicio del período a consultar (en formato
-    ISO-8601 \[20\]);
--   fecha_hasta: fecha de fin del período a consultar (en formato
-    ISO-8601 \[20\]).
+- producto: { soil_moisture_am = Soil Moisture AM };
+- fecha_desde: fecha de inicio del período a consultar (en formato
+  ISO-8601 \[20\]);
+- fecha_hasta: fecha de fin del período a consultar (en formato ISO-8601
+  \[20\]).
 
 *Parámetros del cuerpo del request*:
 
--   zona.geojson: string de formato GeoJSON que representa los puntos o
-    polígonos sobre los cuales se efectuará la consulta.
+- zona.geojson: string de formato GeoJSON que representa los puntos o
+  polígonos sobre los cuales se efectuará la consulta.
 
 *Respuesta*:
 
@@ -3322,14 +3329,14 @@ polígonos) }\]
 Los estadísticos devueltos para el caso de las consultas asociadas a los
 polígonos se codifican de la siguiente manera:
 
--   0%: mínimo valor dentro del polígono
--   25%: percentil 25 de los valores dentro del polígono
--   50%: mediana de los valores dentro del polígono
--   75%: percentil 75 de los valores dentro del polígono
--   100%: máximo valor dentro del polígono
--   Media: media de los valores dentro del polígono
--   Desvio: desvío estándar de los valores dentro del polígono
--   MAD: desvío mediano absoluto de los valores dentro del polígono
+- 0%: mínimo valor dentro del polígono
+- 25%: percentil 25 de los valores dentro del polígono
+- 50%: mediana de los valores dentro del polígono
+- 75%: percentil 75 de los valores dentro del polígono
+- 100%: máximo valor dentro del polígono
+- Media: media de los valores dentro del polígono
+- Desvio: desvío estándar de los valores dentro del polígono
+- MAD: desvío mediano absoluto de los valores dentro del polígono
 
 A continuación se presentan dos ejemplos: una consulta para puntos y
 otra para polígonos. Para la consulta basada en puntos, cada uno de
@@ -3340,7 +3347,7 @@ puntuales.
 
 ``` r
 # Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -3354,25 +3361,25 @@ knitr::kable(head(datos.smap, 15))
 
 | nombre    | fecha      |  valor |
 |:----------|:-----------|-------:|
-| Cap. Meza | 2016-01-01 | 0.3523 |
-| Cap. Meza | 2016-01-04 | 0.3647 |
-| Cap. Meza | 2016-01-07 | 0.3494 |
-| Cap. Meza | 2016-01-10 | 0.3103 |
-| Cap. Meza | 2016-01-13 | 0.2528 |
-| Cap. Meza | 2016-01-16 | 0.2406 |
-| Cap. Meza | 2016-01-19 | 0.2192 |
-| Cap. Meza | 2016-01-22 | 0.2230 |
-| Cap. Meza | 2016-01-25 | 0.2701 |
-| Cap. Meza | 2016-01-28 | 0.3049 |
-| Cap. Meza | 2016-01-31 | 0.4626 |
-| Cap. Meza | 2016-02-03 | 0.3503 |
-| Cap. Meza | 2016-02-06 | 0.3862 |
-| Cap. Meza | 2016-02-09 | 0.3798 |
-| Cap. Meza | 2016-02-12 | 0.3555 |
+| Cap. Meza | 2020-01-01 | 0.2246 |
+| Cap. Meza | 2020-01-04 | 0.1863 |
+| Cap. Meza | 2020-01-07 | 0.2071 |
+| Cap. Meza | 2020-01-10 | 0.1846 |
+| Cap. Meza | 2020-01-13 | 0.2386 |
+| Cap. Meza | 2020-01-16 | 0.2566 |
+| Cap. Meza | 2020-01-19 | 0.1745 |
+| Cap. Meza | 2020-01-22 | 0.3236 |
+| Cap. Meza | 2020-01-25 | 0.2390 |
+| Cap. Meza | 2020-01-28 | 0.1810 |
+| Cap. Meza | 2020-01-31 | 0.2911 |
+| Cap. Meza | 2020-02-03 | 0.2277 |
+| Cap. Meza | 2020-02-06 | 0.1531 |
+| Cap. Meza | 2020-02-09 | 0.2318 |
+| Cap. Meza | 2020-02-12 | 0.1719 |
 
 ``` r
 # Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2016-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -3402,8 +3409,6 @@ ggplot2::ggplot(data = datos.smap) +
   ggplot2::theme_bw()
 ```
 
-    ## Warning: Removed 36 rows containing missing values (geom_point).
-
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-43-1.png" style="display: block; margin: auto;" />
 
 Finalmente, se presenta un ejemplo para 1 polígono correspondiente al
@@ -3411,10 +3416,10 @@ departamento (división administrativa de nivel 1) de Itapuá en Paraguay.
 
 ``` r
 # Buscar SMAP desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2011-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
-datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
+datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
                                                      usuario = usuario.default, 
                                                      clave = clave.default,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
@@ -3423,27 +3428,27 @@ datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.grace,
 knitr::kable(head(datos.smap, 15))
 ```
 
-| NAME   | estadistico | fecha      |   valor |
-|:-------|:------------|:-----------|--------:|
-| Itapúa | 0%          | 2017-01-02 | 69.1179 |
-| Itapúa | 25%         | 2017-01-02 | 72.9187 |
-| Itapúa | 50%         | 2017-01-02 | 78.2464 |
-| Itapúa | 75%         | 2017-01-02 | 80.0851 |
-| Itapúa | 100%        | 2017-01-02 | 90.2329 |
-| Itapúa | Media       | 2017-01-02 | 78.2569 |
-| Itapúa | Desvio      | 2017-01-02 |  6.5793 |
-| Itapúa | MAD         | 2017-01-02 |  5.7960 |
-| Itapúa | 0%          | 2017-01-09 | 69.3254 |
-| Itapúa | 25%         | 2017-01-09 | 72.8829 |
-| Itapúa | 50%         | 2017-01-09 | 78.7612 |
-| Itapúa | 75%         | 2017-01-09 | 83.0683 |
-| Itapúa | 100%        | 2017-01-09 | 91.7608 |
-| Itapúa | Media       | 2017-01-09 | 79.4065 |
-| Itapúa | Desvio      | 2017-01-09 |  7.2088 |
+| NAME   | estadistico | fecha      |  valor |
+|:-------|:------------|:-----------|-------:|
+| Itapúa | 0%          | 2020-01-01 | 0.1147 |
+| Itapúa | 25%         | 2020-01-01 | 0.1663 |
+| Itapúa | 50%         | 2020-01-01 | 0.2018 |
+| Itapúa | 75%         | 2020-01-01 | 0.2365 |
+| Itapúa | 100%        | 2020-01-01 | 0.3308 |
+| Itapúa | Desvio      | 2020-01-01 | 0.0426 |
+| Itapúa | MAD         | 2020-01-01 | 0.0528 |
+| Itapúa | Media       | 2020-01-01 | 0.2052 |
+| Itapúa | 0%          | 2020-01-04 | 0.1366 |
+| Itapúa | 25%         | 2020-01-04 | 0.1796 |
+| Itapúa | 50%         | 2020-01-04 | 0.1894 |
+| Itapúa | 75%         | 2020-01-04 | 0.2064 |
+| Itapúa | 100%        | 2020-01-04 | 0.3659 |
+| Itapúa | Desvio      | 2020-01-04 | 0.0266 |
+| Itapúa | MAD         | 2020-01-04 | 0.0185 |
 
 ``` r
 # Buscar SMAP desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
-fecha.desde <- ConvertirFechaISO8601(as.Date("2017-01-01", tz = UTC))
+fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
 datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
@@ -3476,6 +3481,257 @@ ggplot2::ggplot(data = datos.smap.filt) +
 ```
 
 <img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-45-1.png" style="display: block; margin: auto;" />
+
+## 4.11. Pronósticos Sub-Estacionales
+
+Las perspectivas subestacionales elaboradas en el marco de una
+consultoría financiada por el proyecto ENANDES+, liderada por el Mg.
+Félix Carrasco en colaboración con el grupo DiVAr (Dinámica de la
+Variabilidad atmosférica sobre Sudamérica, Centro de Investigaciones del
+Mar y la Atmósfera), se basan en la calibración de los modelos que
+integran la base de datos
+[IRI/SubC](https://iridl.ldeo.columbia.edu/SOURCES/.Models/.SubX/). Se
+incluyen los pronósticos de los modelos RSMAS-CCSM4, GMAO-GEOS_V2p1,
+NCEP-CFSv2, ECCC-GEPS8 y EMC-GEFSv12_CPC, que se calibran de manera
+individual utilizando la técnica de “correlación probabilística de
+anomalías” \[25\]. Dicha técnica se implementa a partir de una matriz de
+correlación calculada con los pronósticos emitidos entre julio de 2023 y
+julio de 2024. Asimismo, con el fin de disponer operativamente de los
+pronósticos calibrados los días miércoles, las fechas de emisión de los
+distintos modelos se alinean previamente. Como conjunto de referencia se
+utilizan los datos del reanálisis ERA5 \[26\] en el período 1998-2016,
+tanto para temperatura como para precipitación, disponibles a través de
+[Copernicus](https://climate.copernicus.eu/).
+
+### 4.11.1. Consultar las fechas disponibles
+
+Este servicio devuelve como respuesta un JSON con las fechas
+disponibles. Es decir, todas aquellas fechas para las cuales existen
+pronósticos subestacionales calibrados. El JSON devuelvo por este
+servicio es un listado de fechas en formato string.
+
+*Ruta*: /pronos/sseas/fechas
+
+*Método*: GET
+
+*Respuesta*: \[ string, string, …\]
+
+*Ejemplo*:
+
+``` r
+# Definir URL de la consulta a ser realizada a la API
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/fechas")
+
+# Descargar datos
+datos.descargados <- ConsumirServicioJSON(url = url.prono.sseas,
+                                          usuario = usuario.default,
+                                          clave = clave.default)
+
+# Ordenar fechas en orden decreciente
+datos.descargados <- stringi::stri_sort(datos.descargados, decreasing = TRUE)
+
+# Mostrar datos en formato tabular
+knitr::kable(head(datos.descargados, 10), col.names = "fechas")
+```
+
+| fechas     |
+|:-----------|
+| 2025-12-31 |
+| 2025-12-24 |
+| 2025-12-17 |
+| 2025-08-20 |
+
+### 4.11.2. Descargar archivo NetCDF (incluye todas las semanas objetivo)
+
+Este servicio devuelve como respuesta un stream de datos binarios
+correspondiente a un archivo de formato NetCDF \[18\]. Dicho archivo
+NetCDF tiene la siguiente estructura de dimensiones y variables:
+
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - Código EPSG: 4326.
+- Dimensiones:
+  - lon: coordenada X (o longitud) expresada en grados decimales;
+  - lat: coordenada Y (o latitud) expresada en grados decimales;
+- Variables:
+  - prob_corr: la probabilidad de exceder el percentil consultado.
+
+Con el propósito de facilitar la manipulación de los datos devueltos
+(que requiere conocimiento sobre archivos NetCDF), se recomienda
+utilizar la función *DescargarNetCDF* provista al inicio del documento.
+Esta función permite invocar el servicio y descargar el archivo NetCDF.
+
+*Ruta*:
+/pronos/sseas/{modelo:string}/{variable:string}/{percentil:int}/{fecha_calibracion:date}
+
+*Método*: GET
+
+*Parámetros*:
+
+- modelo: el modelo calibrado (RSMAS-CCSM4, GMAO-GEOS_V2p1, NCEP-CFSv2,
+  ECCC-GEPS8 y EMC-GEFSv12_CP);
+- variable: la variable calibrada (pr, tas), donde pr es la
+  precipitación y tas la temperatura;
+- percentil: el percentil objetivo (20, 80);
+- fecha_calibracion: la fecha de calibración (en formato ISO-8601
+  \[20\]).
+
+*Respuesta*: Stream binario correspondiente a un archivo NetCDF (ver
+descripción en párrafos anteriores).
+
+*Ejemplo*:
+
+``` r
+# Descargar el NetCDF completo para una fecha dada. Este NetCDF incluye los
+#   pronósticos para 1, 2 y 3y4 semanas!
+
+# Definir parámetros de la consulta a ser realizada a la API
+modelo <- "CFSv2"
+variable <- "pr"
+percentil <- 20
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}")
+
+# Definir el path donde guardar el archivo desacargado
+archivo.netcdf    <- "/tmp/PronoSEASS.nc"
+
+# Descargar NetCDF
+resultado <- DescargarNetCDF(filepath = archivo.netcdf,
+                             url = url.prono.sseas, 
+                             usuario = usuario.default, 
+                             clave = clave.default)
+
+if (resultado) {
+  
+  # Leer NetCDF y extrar pronóstico para la semana 1
+  filtered_data <- tidync::tidync(archivo.netcdf) %>%
+    tidync::activate("D0,D1,D2") %>%
+    tidync::hyper_filter(
+      semanas = (semanas == 1)) %>%
+    tidync::hyper_tibble() %>%
+    dplyr::select(lon="X", lat="Y", val="prob_corr")
+  
+  # Convertir los datos extraídos a un objeto de tipo raster
+  spat_raster <- terra::rast(x=filtered_data, type="xyz")
+  terra::crs(spat_raster) <- "EPSG:4326"
+  
+  # Leer GeoJSON con el contorno del CRC-SAS
+  crcsas.geojson <- paste0(getwd(), "/data/CRC-SAS.geojson")
+  crcsas.sf      <- geojsonsf::geojson_sf(crcsas.geojson)
+  
+  # Graficar raster 
+  ggplot2::ggplot() +
+    tidyterra::geom_spatraster(data = spat_raster) +
+    ggplot2::coord_sf() +
+    ggplot2::scale_fill_viridis_c(alpha = .5, begin = 0, end = 1,
+                                  direction = -1, option = "cividis", values = NULL, space = "Lab",
+                                  na.value = "white", guide = "colourbar", aesthetics = "fill") +
+    ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
+    ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
+    ggplot2::labs(x = "", y = "", fill = "",
+                  title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                  subtitle = "Semana 1") +
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      legend.position = 'right',
+      plot.title = ggplot2::element_text(hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(hjust = 0.5)
+    )
+  
+}
+```
+
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-47-1.png" style="display: block; margin: auto;" />
+
+Adicionalmente, también es posible desacargar el archivo utilizando
+CURL.
+
+``` bash
+curl --header "Content-Type: application/x-netcdf4" --request GET "<url>" --output PronoSEASS.nc --insecure
+```
+
+### 4.11.3. Descargar datos en formato JSON (incluye una sola semana objetivo)
+
+Este servicio devuelve como respuesta un JSON con los valores
+pronosticados, pero para una sola semana objetivo. Dicho JSON contiene
+la siguiente información:
+
+- Sistema de coordenadas:
+  - Latitud/Longitud: sistema de coordenadas expresadas en grados
+    decimales;
+  - Código EPSG: 4326.
+- Variables:
+  - lon: coordenada X (o longitud) expresada en grados decimales;
+  - lat: coordenada Y (o latitud) expresada en grados decimales;
+  - val: la probabilidad de exceder el percentil consultado.
+
+*Ruta*:
+/pronos/sseas/{modelo:string}/{variable:string}/{percentil:int}/{fecha_calibracion:date}/{semana_objetivo:int}
+
+*Método*: GET
+
+*Parámetros*:
+
+- modelo: el modelo calibrado (RSMAS-CCSM4, GMAO-GEOS_V2p1, NCEP-CFSv2,
+  ECCC-GEPS8 y EMC-GEFSv12_CP);
+- variable: la variable calibrada (pr, tas), donde pr es la
+  precipitación y tas la temperatura;
+- percentil: el percentil objetivo (20, 80);
+- fecha_calibracion: la fecha de calibración (en formato ISO-8601
+  \[20\]);
+- semana_objetivo: la semana objetivo (1, 2, 3). OBS: la semana 3
+  incluye la 4.
+
+*Respuesta*: \[ { lon: float, lat: float, val: float }\]
+
+*Ejemplo*:
+
+``` r
+# Descargar pronóstico calibrado para una semana en particular.
+
+# Definir parámetros de la consulta a ser realizada a la API
+modelo <- "CFSv2"
+variable <- "pr"
+percentil <- 20
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+semana.objetivo <- 1
+url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}/{semana.objetivo}")
+
+# Descargar datos
+datos.descargados <- ConsumirServicioJSON(url = url.prono.sseas,
+                                          usuario = usuario.default,
+                                          clave = clave.default)
+
+# Convertir los datos extraídos a un objeto de tipo raster
+spat.raster <- terra::rast(x=datos.descargados, type="xyz")
+terra::crs(spat_raster) <- "EPSG:4326"
+
+# Leer GeoJSON con el contorno del CRC-SAS
+crcsas.geojson <- paste0(getwd(), "/data/CRC-SAS.geojson")
+crcsas.sf      <- geojsonsf::geojson_sf(crcsas.geojson)
+
+# Graficar raster 
+ggplot2::ggplot() +
+  tidyterra::geom_spatraster(data = spat.raster) +
+  ggplot2::coord_sf() +
+  ggplot2::scale_fill_viridis_c(alpha = .5, begin = 0, end = 1,
+                                direction = -1, option = "cividis", values = NULL, space = "Lab",
+                                na.value = "white", guide = "colourbar", aesthetics = "fill") +
+  ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
+  ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
+  ggplot2::labs(x = "", y = "", fill = "",
+                title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                subtitle = "Semana 1") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'right',
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5)
+  )
+```
+
+<img src="Manual_Referencia_API_files/figure-gfm/unnamed-chunk-49-1.png" style="display: block; margin: auto;" />
 
 # Referencias
 
@@ -3542,3 +3798,12 @@ Kumar, P. (2000), A catchment-based approach to modeling land surface
 processes in a general circulation model: 1. Model structure. J.
 Geophys. Res., 105(D20), 24809– 24822,
 <https://doi.org/10.1029/2000JD900327>.
+
+\[25\] van den Dool, H., E. Becker, L.-C. Chen, and Q. Zhang, 2017: The
+probability anomaly correlation and calibration of probabilistic
+forecasts. Weather and Forecasting, 32, 199-206.
+<https://doi.org/10.1175/WAF-D-16-0115.1>.
+
+\[26\] Hersbach, H., and coauthors, 2020: The ERA5 global reanalysis.
+Quarterly Journal of the Royal Meteorological Society, 146, 1999-2049.
+<https://doi.org/10.1002/qj.3803>.

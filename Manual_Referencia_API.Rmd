@@ -2202,7 +2202,7 @@ Los estadísticos devueltos para el caso de las consultas asociadas a los políg
 A continuación se presentan dos ejemplos: una consulta para puntos y otra para polígonos. Para la consulta basada en puntos, cada uno de ellos tiene asociado un nombre que identifica la ubicación. Para el caso de los polígonos, cada uno de ellos tiene asociado un nombre que representa la ubicación. Se presenta primero el ejemplo para ubicaciones puntuales.
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -2216,7 +2216,7 @@ knitr::kable(head(datos.smap, 15))
 ```
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -2250,7 +2250,7 @@ ggplot2::ggplot(data = datos.smap) +
 Finalmente, se presenta un ejemplo para 1 polígono correspondiente al departamento (división administrativa de nivel 1) de Itapuá en Paraguay.
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Buscar SMAP desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -2265,7 +2265,7 @@ knitr::kable(head(datos.smap, 15))
 
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Buscar SMAP desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")

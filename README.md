@@ -3346,7 +3346,7 @@ representa la ubicación. Se presenta primero el ejemplo para ubicaciones
 puntuales.
 
 ``` r
-# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -3378,7 +3378,7 @@ knitr::kable(head(datos.smap, 15))
 | Cap. Meza | 2020-02-12 | 0.1719 |
 
 ``` r
-# Buscar SMAP desde Enero de 2016 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 en 1 sola ubicación (Capitán Meza - Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -3415,7 +3415,7 @@ Finalmente, se presenta un ejemplo para 1 polígono correspondiente al
 departamento (división administrativa de nivel 1) de Itapuá en Paraguay.
 
 ``` r
-# Buscar SMAP desde Enero de 2011 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")
@@ -3447,7 +3447,7 @@ knitr::kable(head(datos.smap, 15))
 | Itapúa | MAD         | 2020-01-04 | 0.0185 |
 
 ``` r
-# Buscar SMAP desde Enero de 2017 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
+# Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
 fecha.desde <- ConvertirFechaISO8601(as.Date("2020-01-01", tz = UTC))
 fecha.hasta <- ConvertirFechaISO8601(as.Date("2021-12-31", tz = UTC))
 url.smap    <- glue::glue("{base.url}/smap/serie_temporal/soil_moisture_am/{fecha.desde}/{fecha.hasta}")

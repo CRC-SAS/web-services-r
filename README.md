@@ -144,12 +144,14 @@ datos devueltos.
 ``` r
 # Definición de funciones globales, en lenguaje R.
 
-# El parámetro ssl_verifypeer=FALSE implica que no se va a verificar la validez del certificado 
-# utilizado en la conexión SSL establecida con la API del CRC-SAS. Esto es útil cuando la máquina 
-# cliente no puede validar el certificado emitido por la CA del CRC-SAS.
+# El parámetro ssl_verifypeer=FALSE implica que no se va a verificar la validez 
+#   del certificado utilizado en la conexión SSL establecida con la API del 
+#   CRC-SAS. Esto es útil cuando la máquina cliente no puede validar el 
+#   certificado emitido por la CA del CRC-SAS.
 httr::set_config( httr::config(ssl_verifypeer = FALSE) )
 
-# Función para acceder a un servicio web definido por una URL utilizando el método GET.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   el método GET.
 # Devuelve la respuesta como texto plano.
 ConsumirServicioGET <- function(url, usuario, clave) {
   req  <- httr::GET(url = url, 
@@ -158,7 +160,8 @@ ConsumirServicioGET <- function(url, usuario, clave) {
   return (httr::content(req, as = "text"))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando el método POST.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   el método POST.
 # Devuelve la respuesta como raw.
 ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
   req  <- httr::POST(url = url, body = body, encode = "json", 
@@ -167,15 +170,18 @@ ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw")
   return (httr::content(req, as = return.type))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Asumiendo que la respuesta es un string JSON, hace la conversión del mismo a Data Frame.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave.
+# Asumiendo que la respuesta es un string JSON, hace la conversión del 
+#   mismo a un objeto DataFrame.
 ConsumirServicioJSON <- function(url, usuario, clave) {
   respuesta <- ConsumirServicioGET(url, usuario, clave)
   return (jsonlite::fromJSON(respuesta))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Se envía un archivo GeoJSON para realizar la consulta en un área determinada.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave. Se envía un archivo GeoJSON para realizar la consulta 
+#   en un área determinada.
 # La respuesta se devuelve con un objeto de tipo raster.
 ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) {
   # a. Obtener datos y guardarlos en un archivo temporal
@@ -213,7 +219,7 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
 }
 
 # Función para descargar un archivo NetCDF desde un servicio web definido por 
-#   una URL, utilizando un usuario y clave.
+#   una URL, utilizando usuario y clave.
 # La respuesta es TRUE si la descarga fue exitosa y FALSE en caso contrario.
 DescargarNetCDF <- function(filepath, url, usuario, clave) {
   # a. Realizar consulta al backenc
@@ -231,9 +237,10 @@ DescargarNetCDF <- function(filepath, url, usuario, clave) {
   return (TRUE)
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
-# La respuesta se devuelve con un Data Frame.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave. Se envía un archivo GeoJSON para realizar la consulta 
+#   en puntos o en un área determinada.
+# La respuesta se devuelve como un objeto DataFrame.
 ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.geojson.zona) {
   # a. Obtener datos y guardarlos en un archivo temporal
   zona.geojson <- readr::read_file(file = archivo.geojson.zona)
@@ -243,8 +250,9 @@ ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.g
   return (jsonlite::fromJSON(respuesta))
 }
 
-# Convierte una fecha a formato IS0 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el huso horario GMT-0.
-# Este es formato un estándar para representar fechas como una cadena de caracteres [7].
+# Convierte una fecha a formato ISO 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el 
+#   huso horario GMT-0. Este es formato un estándar para representar fechas 
+#   como una cadena de caracteres [7].
 ConvertirFechaISO8601 <- function(fecha) {
   return (strftime(fecha, "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
 }
@@ -1622,50 +1630,50 @@ knitr::kable(datos.ndvi)
 | nombre       | estadistico | fecha      |   valor |
 |:-------------|:------------|:-----------|--------:|
 | Buenos Aires | 0%          | 2019-01-01 |  0.0159 |
+| Buenos Aires | 100%        | 2019-01-01 |  0.9203 |
 | Buenos Aires | 25%         | 2019-01-01 |  0.6246 |
 | Buenos Aires | 50%         | 2019-01-01 |  0.6859 |
 | Buenos Aires | 75%         | 2019-01-01 |  0.7389 |
-| Buenos Aires | 100%        | 2019-01-01 |  0.9203 |
 | Buenos Aires | Desvio      | 2019-01-01 |  0.0987 |
 | Buenos Aires | MAD         | 2019-01-01 |  0.0838 |
 | Buenos Aires | Media       | 2019-01-01 |  0.6739 |
 | Buenos Aires | 0%          | 2019-01-09 | -0.1539 |
+| Buenos Aires | 100%        | 2019-01-09 |  0.9207 |
 | Buenos Aires | 25%         | 2019-01-09 |  0.6663 |
 | Buenos Aires | 50%         | 2019-01-09 |  0.7232 |
 | Buenos Aires | 75%         | 2019-01-09 |  0.7747 |
-| Buenos Aires | 100%        | 2019-01-09 |  0.9207 |
 | Buenos Aires | Desvio      | 2019-01-09 |  0.0966 |
 | Buenos Aires | MAD         | 2019-01-09 |  0.0802 |
 | Buenos Aires | Media       | 2019-01-09 |  0.7120 |
 | Cordoba      | 0%          | 2019-01-01 | -0.0401 |
+| Cordoba      | 100%        | 2019-01-01 |  0.9119 |
 | Cordoba      | 25%         | 2019-01-01 |  0.5047 |
 | Cordoba      | 50%         | 2019-01-01 |  0.5852 |
 | Cordoba      | 75%         | 2019-01-01 |  0.6724 |
-| Cordoba      | 100%        | 2019-01-01 |  0.9119 |
 | Cordoba      | Desvio      | 2019-01-01 |  0.1182 |
 | Cordoba      | MAD         | 2019-01-01 |  0.1243 |
 | Cordoba      | Media       | 2019-01-01 |  0.5886 |
 | Cordoba      | 0%          | 2019-01-09 | -0.0593 |
+| Cordoba      | 100%        | 2019-01-09 |  0.9352 |
 | Cordoba      | 25%         | 2019-01-09 |  0.6070 |
 | Cordoba      | 50%         | 2019-01-09 |  0.7040 |
 | Cordoba      | 75%         | 2019-01-09 |  0.7812 |
-| Cordoba      | 100%        | 2019-01-09 |  0.9352 |
 | Cordoba      | Desvio      | 2019-01-09 |  0.1193 |
 | Cordoba      | MAD         | 2019-01-09 |  0.1258 |
 | Cordoba      | Media       | 2019-01-09 |  0.6888 |
 | Uruguay      | 0%          | 2019-01-01 | -0.1729 |
+| Uruguay      | 100%        | 2019-01-01 |  0.8865 |
 | Uruguay      | 25%         | 2019-01-01 |  0.6378 |
 | Uruguay      | 50%         | 2019-01-01 |  0.6850 |
 | Uruguay      | 75%         | 2019-01-01 |  0.7282 |
-| Uruguay      | 100%        | 2019-01-01 |  0.8865 |
 | Uruguay      | Desvio      | 2019-01-01 |  0.1106 |
 | Uruguay      | MAD         | 2019-01-01 |  0.0667 |
 | Uruguay      | Media       | 2019-01-01 |  0.6688 |
 | Uruguay      | 0%          | 2019-01-09 | -0.1957 |
+| Uruguay      | 100%        | 2019-01-09 |  0.8680 |
 | Uruguay      | 25%         | 2019-01-09 |  0.6279 |
 | Uruguay      | 50%         | 2019-01-09 |  0.6648 |
 | Uruguay      | 75%         | 2019-01-09 |  0.6985 |
-| Uruguay      | 100%        | 2019-01-09 |  0.8680 |
 | Uruguay      | Desvio      | 2019-01-09 |  0.0911 |
 | Uruguay      | MAD         | 2019-01-09 |  0.0518 |
 | Uruguay      | Media       | 2019-01-09 |  0.6556 |
@@ -1903,50 +1911,50 @@ knitr::kable(datos.prcp)
 | nombre       | estadistico | fecha      |    valor |
 |:-------------|:------------|:-----------|---------:|
 | Buenos Aires | 0%          | 2019-01-01 | 173.0689 |
+| Buenos Aires | 100%        | 2019-01-01 | 267.4781 |
 | Buenos Aires | 25%         | 2019-01-01 | 192.7029 |
 | Buenos Aires | 50%         | 2019-01-01 | 199.9755 |
 | Buenos Aires | 75%         | 2019-01-01 | 213.9939 |
-| Buenos Aires | 100%        | 2019-01-01 | 267.4781 |
 | Buenos Aires | Desvio      | 2019-01-01 |  17.5320 |
 | Buenos Aires | MAD         | 2019-01-01 |  13.5045 |
 | Buenos Aires | Media       | 2019-01-01 | 204.9081 |
 | Buenos Aires | 0%          | 2019-02-01 |  39.7508 |
+| Buenos Aires | 100%        | 2019-02-01 |  85.9510 |
 | Buenos Aires | 25%         | 2019-02-01 |  62.7362 |
 | Buenos Aires | 50%         | 2019-02-01 |  68.8801 |
 | Buenos Aires | 75%         | 2019-02-01 |  74.0915 |
-| Buenos Aires | 100%        | 2019-02-01 |  85.9510 |
 | Buenos Aires | Desvio      | 2019-02-01 |   9.2723 |
 | Buenos Aires | MAD         | 2019-02-01 |   8.2983 |
 | Buenos Aires | Media       | 2019-02-01 |  67.2280 |
 | Cordoba      | 0%          | 2019-01-01 | 104.2619 |
+| Cordoba      | 100%        | 2019-01-01 | 256.6184 |
 | Cordoba      | 25%         | 2019-01-01 | 141.1514 |
 | Cordoba      | 50%         | 2019-01-01 | 162.9541 |
 | Cordoba      | 75%         | 2019-01-01 | 182.1200 |
-| Cordoba      | 100%        | 2019-01-01 | 256.6184 |
 | Cordoba      | Desvio      | 2019-01-01 |  33.4216 |
 | Cordoba      | MAD         | 2019-01-01 |  31.4784 |
 | Cordoba      | Media       | 2019-01-01 | 166.1185 |
 | Cordoba      | 0%          | 2019-02-01 |  20.8781 |
+| Cordoba      | 100%        | 2019-02-01 |  77.0143 |
 | Cordoba      | 25%         | 2019-02-01 |  37.7954 |
 | Cordoba      | 50%         | 2019-02-01 |  44.0428 |
 | Cordoba      | 75%         | 2019-02-01 |  53.4448 |
-| Cordoba      | 100%        | 2019-02-01 |  77.0143 |
 | Cordoba      | Desvio      | 2019-02-01 |  11.3705 |
 | Cordoba      | MAD         | 2019-02-01 |  11.0257 |
 | Cordoba      | Media       | 2019-02-01 |  46.4813 |
 | Uruguay      | 0%          | 2019-01-01 | 249.7942 |
+| Uruguay      | 100%        | 2019-01-01 | 372.7469 |
 | Uruguay      | 25%         | 2019-01-01 | 292.1535 |
 | Uruguay      | 50%         | 2019-01-01 | 305.5407 |
 | Uruguay      | 75%         | 2019-01-01 | 318.2879 |
-| Uruguay      | 100%        | 2019-01-01 | 372.7469 |
 | Uruguay      | Desvio      | 2019-01-01 |  20.1602 |
 | Uruguay      | MAD         | 2019-01-01 |  19.6277 |
 | Uruguay      | Media       | 2019-01-01 | 304.6796 |
 | Uruguay      | 0%          | 2019-02-01 |  57.2918 |
+| Uruguay      | 100%        | 2019-02-01 | 128.5148 |
 | Uruguay      | 25%         | 2019-02-01 |  75.8760 |
 | Uruguay      | 50%         | 2019-02-01 |  81.9168 |
 | Uruguay      | 75%         | 2019-02-01 |  91.9705 |
-| Uruguay      | 100%        | 2019-02-01 | 128.5148 |
 | Uruguay      | Desvio      | 2019-02-01 |  14.8448 |
 | Uruguay      | MAD         | 2019-02-01 |  10.0489 |
 | Uruguay      | Media       | 2019-02-01 |  86.7375 |
@@ -2194,50 +2202,50 @@ knitr::kable(datos.spi3)
 | nombre       | estadistico | fecha      |   valor |
 |:-------------|:------------|:-----------|--------:|
 | Buenos Aires | 0%          | 2019-01-01 | -0.0780 |
+| Buenos Aires | 100%        | 2019-01-01 |  0.8423 |
 | Buenos Aires | 25%         | 2019-01-01 |  0.2517 |
 | Buenos Aires | 50%         | 2019-01-01 |  0.3980 |
 | Buenos Aires | 75%         | 2019-01-01 |  0.5374 |
-| Buenos Aires | 100%        | 2019-01-01 |  0.8423 |
 | Buenos Aires | Desvio      | 2019-01-01 |  0.1849 |
 | Buenos Aires | MAD         | 2019-01-01 |  0.2142 |
 | Buenos Aires | Media       | 2019-01-01 |  0.3911 |
 | Buenos Aires | 0%          | 2019-01-06 |  0.4098 |
+| Buenos Aires | 100%        | 2019-01-06 |  1.1238 |
 | Buenos Aires | 25%         | 2019-01-06 |  0.5933 |
 | Buenos Aires | 50%         | 2019-01-06 |  0.7258 |
 | Buenos Aires | 75%         | 2019-01-06 |  0.8388 |
-| Buenos Aires | 100%        | 2019-01-06 |  1.1238 |
 | Buenos Aires | Desvio      | 2019-01-06 |  0.1654 |
 | Buenos Aires | MAD         | 2019-01-06 |  0.1805 |
 | Buenos Aires | Media       | 2019-01-06 |  0.7293 |
 | Cordoba      | 0%          | 2019-01-01 | -1.1062 |
+| Cordoba      | 100%        | 2019-01-01 |  1.2773 |
 | Cordoba      | 25%         | 2019-01-01 | -0.3529 |
 | Cordoba      | 50%         | 2019-01-01 |  0.1425 |
 | Cordoba      | 75%         | 2019-01-01 |  0.4282 |
-| Cordoba      | 100%        | 2019-01-01 |  1.2773 |
 | Cordoba      | Desvio      | 2019-01-01 |  0.5636 |
 | Cordoba      | MAD         | 2019-01-01 |  0.5220 |
 | Cordoba      | Media       | 2019-01-01 |  0.0558 |
 | Cordoba      | 0%          | 2019-01-06 | -0.5794 |
+| Cordoba      | 100%        | 2019-01-06 |  1.4607 |
 | Cordoba      | 25%         | 2019-01-06 |  0.1742 |
 | Cordoba      | 50%         | 2019-01-06 |  0.6288 |
 | Cordoba      | 75%         | 2019-01-06 |  0.9593 |
-| Cordoba      | 100%        | 2019-01-06 |  1.4607 |
 | Cordoba      | Desvio      | 2019-01-06 |  0.5007 |
 | Cordoba      | MAD         | 2019-01-06 |  0.5279 |
 | Cordoba      | Media       | 2019-01-06 |  0.5502 |
 | Uruguay      | 0%          | 2019-01-01 |  0.4794 |
+| Uruguay      | 100%        | 2019-01-01 |  0.8053 |
 | Uruguay      | 25%         | 2019-01-01 |  0.5951 |
 | Uruguay      | 50%         | 2019-01-01 |  0.6368 |
 | Uruguay      | 75%         | 2019-01-01 |  0.6988 |
-| Uruguay      | 100%        | 2019-01-01 |  0.8053 |
 | Uruguay      | Desvio      | 2019-01-01 |  0.0750 |
 | Uruguay      | MAD         | 2019-01-01 |  0.0737 |
 | Uruguay      | Media       | 2019-01-01 |  0.6487 |
 | Uruguay      | 0%          | 2019-01-06 |  0.8694 |
+| Uruguay      | 100%        | 2019-01-06 |  1.0960 |
 | Uruguay      | 25%         | 2019-01-06 |  0.9657 |
 | Uruguay      | 50%         | 2019-01-06 |  0.9973 |
 | Uruguay      | 75%         | 2019-01-06 |  1.0322 |
-| Uruguay      | 100%        | 2019-01-06 |  1.0960 |
 | Uruguay      | Desvio      | 2019-01-06 |  0.0461 |
 | Uruguay      | MAD         | 2019-01-06 |  0.0491 |
 | Uruguay      | Media       | 2019-01-06 |  0.9979 |
@@ -2637,50 +2645,50 @@ knitr::kable(datos.esi)
 | nombre       | estadistico | fecha      |   valor |
 |:-------------|:------------|:-----------|--------:|
 | Buenos Aires | 0%          | 2019-01-08 |  0.8725 |
+| Buenos Aires | 100%        | 2019-01-08 |  2.6498 |
 | Buenos Aires | 25%         | 2019-01-08 |  1.4398 |
 | Buenos Aires | 50%         | 2019-01-08 |  1.6139 |
 | Buenos Aires | 75%         | 2019-01-08 |  1.8178 |
-| Buenos Aires | 100%        | 2019-01-08 |  2.6498 |
 | Buenos Aires | Desvio      | 2019-01-08 |  0.2871 |
 | Buenos Aires | MAD         | 2019-01-08 |  0.2732 |
 | Buenos Aires | Media       | 2019-01-08 |  1.6387 |
 | Buenos Aires | 0%          | 2019-01-15 |  1.1135 |
+| Buenos Aires | 100%        | 2019-01-15 |  3.5000 |
 | Buenos Aires | 25%         | 2019-01-15 |  1.7065 |
 | Buenos Aires | 50%         | 2019-01-15 |  1.9255 |
 | Buenos Aires | 75%         | 2019-01-15 |  2.1792 |
-| Buenos Aires | 100%        | 2019-01-15 |  3.5000 |
 | Buenos Aires | Desvio      | 2019-01-15 |  0.3736 |
 | Buenos Aires | MAD         | 2019-01-15 |  0.3553 |
 | Buenos Aires | Media       | 2019-01-15 |  1.9667 |
 | Cordoba      | 0%          | 2019-01-08 | -0.9606 |
+| Cordoba      | 100%        | 2019-01-08 |  2.9342 |
 | Cordoba      | 25%         | 2019-01-08 |  0.1445 |
 | Cordoba      | 50%         | 2019-01-08 |  0.7749 |
 | Cordoba      | 75%         | 2019-01-08 |  1.3972 |
-| Cordoba      | 100%        | 2019-01-08 |  2.9342 |
 | Cordoba      | Desvio      | 2019-01-08 |  0.7589 |
 | Cordoba      | MAD         | 2019-01-08 |  0.9262 |
 | Cordoba      | Media       | 2019-01-08 |  0.7868 |
 | Cordoba      | 0%          | 2019-01-15 |  0.0937 |
+| Cordoba      | 100%        | 2019-01-15 |  3.5000 |
 | Cordoba      | 25%         | 2019-01-15 |  1.0782 |
 | Cordoba      | 50%         | 2019-01-15 |  1.6112 |
 | Cordoba      | 75%         | 2019-01-15 |  2.2889 |
-| Cordoba      | 100%        | 2019-01-15 |  3.5000 |
 | Cordoba      | Desvio      | 2019-01-15 |  0.7915 |
 | Cordoba      | MAD         | 2019-01-15 |  0.8593 |
 | Cordoba      | Media       | 2019-01-15 |  1.7121 |
 | Uruguay      | 0%          | 2019-01-08 |  0.5260 |
+| Uruguay      | 100%        | 2019-01-08 |  2.4932 |
 | Uruguay      | 25%         | 2019-01-08 |  1.4537 |
 | Uruguay      | 50%         | 2019-01-08 |  1.6513 |
 | Uruguay      | 75%         | 2019-01-08 |  1.8440 |
-| Uruguay      | 100%        | 2019-01-08 |  2.4932 |
 | Uruguay      | Desvio      | 2019-01-08 |  0.3016 |
 | Uruguay      | MAD         | 2019-01-08 |  0.2887 |
 | Uruguay      | Media       | 2019-01-08 |  1.6395 |
 | Uruguay      | 0%          | 2019-01-15 |  0.9912 |
+| Uruguay      | 100%        | 2019-01-15 |  2.5436 |
 | Uruguay      | 25%         | 2019-01-15 |  1.6502 |
 | Uruguay      | 50%         | 2019-01-15 |  1.8414 |
 | Uruguay      | 75%         | 2019-01-15 |  2.0123 |
-| Uruguay      | 100%        | 2019-01-15 |  2.5436 |
 | Uruguay      | Desvio      | 2019-01-15 |  0.2796 |
 | Uruguay      | MAD         | 2019-01-15 |  0.2669 |
 | Uruguay      | Media       | 2019-01-15 |  1.8371 |
@@ -3073,18 +3081,18 @@ knitr::kable(head(datos.grace, 16))
 | NAME   | estadistico | fecha      |   valor |
 |:-------|:------------|:-----------|--------:|
 | Itapúa | 0%          | 2011-01-03 | 75.1413 |
+| Itapúa | 100%        | 2011-01-03 | 87.9798 |
 | Itapúa | 25%         | 2011-01-03 | 81.0486 |
 | Itapúa | 50%         | 2011-01-03 | 82.4830 |
 | Itapúa | 75%         | 2011-01-03 | 85.7321 |
-| Itapúa | 100%        | 2011-01-03 | 87.9798 |
 | Itapúa | Desvio      | 2011-01-03 |  3.0883 |
 | Itapúa | MAD         | 2011-01-03 |  2.6933 |
 | Itapúa | Media       | 2011-01-03 | 83.1993 |
 | Itapúa | 0%          | 2011-01-10 | 76.8699 |
+| Itapúa | 100%        | 2011-01-10 | 89.3736 |
 | Itapúa | 25%         | 2011-01-10 | 81.5711 |
 | Itapúa | 50%         | 2011-01-10 | 84.5759 |
 | Itapúa | 75%         | 2011-01-10 | 87.2439 |
-| Itapúa | 100%        | 2011-01-10 | 89.3736 |
 | Itapúa | Desvio      | 2011-01-10 |  3.6148 |
 | Itapúa | MAD         | 2011-01-10 |  4.2140 |
 | Itapúa | Media       | 2011-01-10 | 84.2310 |
@@ -3405,7 +3413,7 @@ ggplot2::ggplot(data = datos.smap) +
     y = "Valores de humedad superficial del suelo",
     x = "Mes - Año",
     title = "Humedad superficial del suelo (SMAP) para Cap. Meza (Paraguay)",
-    subtitle = "Producto soil_moisture_am (2016-2021)") +
+    subtitle = "Producto soil_moisture_am (2020-2021)") +
   ggplot2::theme_bw()
 ```
 
@@ -3425,26 +3433,27 @@ datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
 
 # Mostrar datos en formato tabular
-knitr::kable(head(datos.smap, 15))
+knitr::kable(head(datos.smap, 16))
 ```
 
 | NAME   | estadistico | fecha      |  valor |
 |:-------|:------------|:-----------|-------:|
 | Itapúa | 0%          | 2020-01-01 | 0.1147 |
+| Itapúa | 100%        | 2020-01-01 | 0.3308 |
 | Itapúa | 25%         | 2020-01-01 | 0.1663 |
 | Itapúa | 50%         | 2020-01-01 | 0.2018 |
 | Itapúa | 75%         | 2020-01-01 | 0.2365 |
-| Itapúa | 100%        | 2020-01-01 | 0.3308 |
 | Itapúa | Desvio      | 2020-01-01 | 0.0426 |
 | Itapúa | MAD         | 2020-01-01 | 0.0528 |
 | Itapúa | Media       | 2020-01-01 | 0.2052 |
 | Itapúa | 0%          | 2020-01-04 | 0.1366 |
+| Itapúa | 100%        | 2020-01-04 | 0.3659 |
 | Itapúa | 25%         | 2020-01-04 | 0.1796 |
 | Itapúa | 50%         | 2020-01-04 | 0.1894 |
 | Itapúa | 75%         | 2020-01-04 | 0.2064 |
-| Itapúa | 100%        | 2020-01-04 | 0.3659 |
 | Itapúa | Desvio      | 2020-01-04 | 0.0266 |
 | Itapúa | MAD         | 2020-01-04 | 0.0185 |
+| Itapúa | Media       | 2020-01-04 | 0.1941 |
 
 ``` r
 # Buscar SMAP desde Enero de 2020 hasta Diciembre de 2021 para el departamento de Itapúa (Paraguay).
@@ -3476,7 +3485,7 @@ ggplot2::ggplot(data = datos.smap.filt) +
     y = "Mediana y Rango de Valores",
     x = "Mes - Año",
     title = "Humedad superficial del suelo (SMAP) para Itapúa (Paraguay)",
-    subtitle = "Producto soil_moisture_am (2017-2021)") +
+    subtitle = "Producto soil_moisture_am (2020-2021)") +
   ggplot2::theme_bw()
 ```
 
@@ -3507,7 +3516,7 @@ tanto para temperatura como para precipitación, disponibles a través de
 
 Este servicio devuelve como respuesta un JSON con las fechas
 disponibles. Es decir, todas aquellas fechas para las cuales existen
-pronósticos subestacionales calibrados. El JSON devuelvo por este
+pronósticos subestacionales calibrados. El JSON devuelto por este
 servicio es un listado de fechas en formato string.
 
 *Ruta*: /pronos/sseas/fechas
@@ -3536,6 +3545,7 @@ knitr::kable(head(datos.descargados, 10), col.names = "fechas")
 
 | fechas     |
 |:-----------|
+| 2026-01-07 |
 | 2025-12-31 |
 | 2025-12-24 |
 | 2025-12-17 |
@@ -3590,7 +3600,7 @@ descripción en párrafos anteriores).
 modelo <- "CFSv2"
 variable <- "pr"
 percentil <- 20
-fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2026-01-07", tz = UTC))
 url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}")
 
 # Definir el path donde guardar el archivo desacargado
@@ -3604,7 +3614,7 @@ resultado <- DescargarNetCDF(filepath = archivo.netcdf,
 
 if (resultado) {
   
-  # Leer NetCDF y extrar pronóstico para la semana 1
+  # Leer NetCDF y extraer pronóstico para la semana 1
   filtered_data <- tidync::tidync(archivo.netcdf) %>%
     tidync::activate("D0,D1,D2") %>%
     tidync::hyper_filter(
@@ -3630,7 +3640,7 @@ if (resultado) {
     ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
     ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
     ggplot2::labs(x = "", y = "", fill = "",
-                  title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                  title = "Pronóstico Sub-Estacional para el 2026-01-07",
                   subtitle = "Semana 1") +
     ggplot2::theme_bw() +
     ggplot2::theme(
@@ -3688,13 +3698,13 @@ la siguiente información:
 *Ejemplo*:
 
 ``` r
-# Descargar pronóstico calibrado para una semana en particular.
+# Descargar el pronóstico calibrado para una semana en particular.
 
 # Definir parámetros de la consulta a ser realizada a la API
 modelo <- "CFSv2"
 variable <- "pr"
 percentil <- 20
-fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2026-01-07", tz = UTC))
 semana.objetivo <- 1
 url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}/{semana.objetivo}")
 
@@ -3721,7 +3731,7 @@ ggplot2::ggplot() +
   ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
   ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
   ggplot2::labs(x = "", y = "", fill = "",
-                title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                title = "Pronóstico Sub-Estacional para el 2026-01-07",
                 subtitle = "Semana 1") +
   ggplot2::theme_bw() +
   ggplot2::theme(

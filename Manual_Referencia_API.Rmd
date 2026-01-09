@@ -89,12 +89,14 @@ A continuación, definiremos un set de funciones R útiles que le permitirán al
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE }
 # Definición de funciones globales, en lenguaje R.
 
-# El parámetro ssl_verifypeer=FALSE implica que no se va a verificar la validez del certificado 
-# utilizado en la conexión SSL establecida con la API del CRC-SAS. Esto es útil cuando la máquina 
-# cliente no puede validar el certificado emitido por la CA del CRC-SAS.
+# El parámetro ssl_verifypeer=FALSE implica que no se va a verificar la validez 
+#   del certificado utilizado en la conexión SSL establecida con la API del 
+#   CRC-SAS. Esto es útil cuando la máquina cliente no puede validar el 
+#   certificado emitido por la CA del CRC-SAS.
 httr::set_config( httr::config(ssl_verifypeer = FALSE) )
 
-# Función para acceder a un servicio web definido por una URL utilizando el método GET.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   el método GET.
 # Devuelve la respuesta como texto plano.
 ConsumirServicioGET <- function(url, usuario, clave) {
   req  <- httr::GET(url = url, 
@@ -103,7 +105,8 @@ ConsumirServicioGET <- function(url, usuario, clave) {
   return (httr::content(req, as = "text"))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando el método POST.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   el método POST.
 # Devuelve la respuesta como raw.
 ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw") {
   req  <- httr::POST(url = url, body = body, encode = "json", 
@@ -112,15 +115,18 @@ ConsumirServicioPOST <- function(url, usuario, clave, body, return.type = "raw")
   return (httr::content(req, as = return.type))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Asumiendo que la respuesta es un string JSON, hace la conversión del mismo a Data Frame.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave.
+# Asumiendo que la respuesta es un string JSON, hace la conversión del 
+#   mismo a un objeto DataFrame.
 ConsumirServicioJSON <- function(url, usuario, clave) {
   respuesta <- ConsumirServicioGET(url, usuario, clave)
   return (jsonlite::fromJSON(respuesta))
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Se envía un archivo GeoJSON para realizar la consulta en un área determinada.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave. Se envía un archivo GeoJSON para realizar la consulta 
+#   en un área determinada.
 # La respuesta se devuelve con un objeto de tipo raster.
 ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) {
   # a. Obtener datos y guardarlos en un archivo temporal
@@ -158,7 +164,7 @@ ConsumirServicioEspacial <- function(url, usuario, clave, archivo.geojson.zona) 
 }
 
 # Función para descargar un archivo NetCDF desde un servicio web definido por 
-#   una URL, utilizando un usuario y clave.
+#   una URL, utilizando usuario y clave.
 # La respuesta es TRUE si la descarga fue exitosa y FALSE en caso contrario.
 DescargarNetCDF <- function(filepath, url, usuario, clave) {
   # a. Realizar consulta al backenc
@@ -176,9 +182,10 @@ DescargarNetCDF <- function(filepath, url, usuario, clave) {
   return (TRUE)
 }
 
-# Función para acceder a un servicio web definido por una URL utilizando un usuario y clave.
-# Se envía un archivo GeoJSON para realizar la consulta en puntos o un área determinada.
-# La respuesta se devuelve con un Data Frame.
+# Función para acceder a un servicio web definido por una URL utilizando 
+#   usuario y clave. Se envía un archivo GeoJSON para realizar la consulta 
+#   en puntos o en un área determinada.
+# La respuesta se devuelve como un objeto DataFrame.
 ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.geojson.zona) {
   # a. Obtener datos y guardarlos en un archivo temporal
   zona.geojson <- readr::read_file(file = archivo.geojson.zona)
@@ -188,8 +195,9 @@ ConsumirServicioEspacialSerieTemporal <- function(url, usuario, clave, archivo.g
   return (jsonlite::fromJSON(respuesta))
 }
 
-# Convierte una fecha a formato IS0 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el huso horario GMT-0.
-# Este es formato un estándar para representar fechas como una cadena de caracteres [7].
+# Convierte una fecha a formato ISO 8601 (YYYY-MM-DDTHH:mm:ss) utilizando el 
+#   huso horario GMT-0. Este es formato un estándar para representar fechas 
+#   como una cadena de caracteres [7].
 ConvertirFechaISO8601 <- function(fecha) {
   return (strftime(fecha, "%Y-%m-%dT%H:%M:%S", tz = "UTC"))
 }
@@ -2243,7 +2251,7 @@ ggplot2::ggplot(data = datos.smap) +
     y = "Valores de humedad superficial del suelo",
     x = "Mes - Año",
     title = "Humedad superficial del suelo (SMAP) para Cap. Meza (Paraguay)",
-    subtitle = "Producto soil_moisture_am (2016-2021)") +
+    subtitle = "Producto soil_moisture_am (2020-2021)") +
   ggplot2::theme_bw()
 ```
 
@@ -2260,7 +2268,7 @@ datos.smap  <- ConsumirServicioEspacialSerieTemporal(url = url.smap,
                                                      archivo.geojson.zona = paste0(getwd(), "/data/ItapuaPY.geojson"))
 
 # Mostrar datos en formato tabular
-knitr::kable(head(datos.smap, 15))
+knitr::kable(head(datos.smap, 16))
 ```
 
 
@@ -2294,7 +2302,7 @@ ggplot2::ggplot(data = datos.smap.filt) +
     y = "Mediana y Rango de Valores",
     x = "Mes - Año",
     title = "Humedad superficial del suelo (SMAP) para Itapúa (Paraguay)",
-    subtitle = "Producto soil_moisture_am (2017-2021)") +
+    subtitle = "Producto soil_moisture_am (2020-2021)") +
   ggplot2::theme_bw()
 ```
 
@@ -2307,7 +2315,7 @@ Las perspectivas subestacionales elaboradas en el marco de una consultoría fina
 
 Este servicio devuelve como respuesta un JSON con las fechas disponibles. Es decir, 
 todas aquellas fechas para las cuales existen pronósticos subestacionales calibrados. 
-El JSON devuelvo por este servicio es un listado de fechas en formato string.
+El JSON devuelto por este servicio es un listado de fechas en formato string.
 
 *Ruta*: /pronos/sseas/fechas
 
@@ -2376,7 +2384,7 @@ Con el propósito de facilitar la manipulación de los datos devueltos (que requ
 modelo <- "CFSv2"
 variable <- "pr"
 percentil <- 20
-fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2026-01-07", tz = UTC))
 url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}")
 
 # Definir el path donde guardar el archivo desacargado
@@ -2390,7 +2398,7 @@ resultado <- DescargarNetCDF(filepath = archivo.netcdf,
 
 if (resultado) {
   
-  # Leer NetCDF y extrar pronóstico para la semana 1
+  # Leer NetCDF y extraer pronóstico para la semana 1
   filtered_data <- tidync::tidync(archivo.netcdf) %>%
     tidync::activate("D0,D1,D2") %>%
     tidync::hyper_filter(
@@ -2416,7 +2424,7 @@ if (resultado) {
     ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
     ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
     ggplot2::labs(x = "", y = "", fill = "",
-                  title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                  title = "Pronóstico Sub-Estacional para el 2026-01-07",
                   subtitle = "Semana 1") +
     ggplot2::theme_bw() +
     ggplot2::theme(
@@ -2473,13 +2481,13 @@ Este servicio devuelve como respuesta un JSON con los valores pronosticados, per
 *Ejemplo*:
 
 ```{r, echo = TRUE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-# Descargar pronóstico calibrado para una semana en particular.
+# Descargar el pronóstico calibrado para una semana en particular.
 
 # Definir parámetros de la consulta a ser realizada a la API
 modelo <- "CFSv2"
 variable <- "pr"
 percentil <- 20
-fecha.calibracion <- ConvertirFechaISO8601(as.Date("2025-08-20", tz = UTC))
+fecha.calibracion <- ConvertirFechaISO8601(as.Date("2026-01-07", tz = UTC))
 semana.objetivo <- 1
 url.prono.sseas <- glue::glue("{base.url}/pronos/sseas/{modelo}/{variable}/{percentil}/{fecha.calibracion}/{semana.objetivo}")
 
@@ -2506,7 +2514,7 @@ ggplot2::ggplot() +
   ggplot2::guides(fill = ggplot2::guide_colourbar(barwidth = 1 , label.position = "left")) +
   ggplot2::geom_sf(data = crcsas.sf, fill = NA) +
   ggplot2::labs(x = "", y = "", fill = "",
-                title = "Pronóstico Sub-Estacional para el 2025-08-20",
+                title = "Pronóstico Sub-Estacional para el 2026-01-07",
                 subtitle = "Semana 1") +
   ggplot2::theme_bw() +
   ggplot2::theme(
